@@ -7,14 +7,19 @@ sorts bones/materials/bodygroups/flexes/collision, exports Source files,
 generates icons and QC files, compiles with Garry's Mod StudioMDL, and packages
 the final addon.
 
-## Launch The Program
+## Requirements
 
-### Requirements
+These requirements apply when running from source, building the executable, or
+running a packaged release:
 
 - Windows 10/11, 64-bit.
-- Python 3.10 or newer, 64-bit.
-- PowerShell.
 - Garry's Mod installed through Steam for the final QC compile/package step.
+- PowerShell.
+
+Python is only required when running from source or building:
+
+- Python 3.12 is recommended.
+- Python 3.10 or newer, 64-bit, is the minimum supported source-run version.
 
 The app manages its own portable Blender 4.5 setup. On first use it downloads
 the latest Blender 4.5 Windows x64 zip from Blender's official download index,
@@ -30,7 +35,27 @@ install is not required for source runs or packaged EXE builds. The package also
 includes the older Visual C++ runtime DLLs needed by bundled VTFCmd/PyOpenGL
 components.
 
-### Run From Source
+## Run The Program Without Building
+
+### Option A: Run A Packaged Release
+
+If `release\MMDCharacterImporter.exe` already exists, no Python environment is
+required. Launch it directly:
+
+```powershell
+.\release\MMDCharacterImporter.exe
+```
+
+For the portable-folder build, keep `_internal` beside the executable and run:
+
+```powershell
+.\release\MMDCharacterImporter_portable\MMDCharacterImporter.exe
+```
+
+The first launch may take longer while the app prepares its local Blender setup
+under `%LOCALAPPDATA%\MMDCharacterImporter`.
+
+### Option B: Run From Source
 
 Open PowerShell in this folder:
 
@@ -46,7 +71,7 @@ python -m venv .venv
 python -m pip install --upgrade pip
 ```
 
-Install the Python packages used by the GUI and non-Blender helper steps:
+Install the Python packages used by the GUI and helper steps:
 
 ```powershell
 python -m pip install PySide6 numpy Pillow requests PyOpenGL
@@ -74,6 +99,27 @@ does not, browse to the Garry's Mod install folder or directly to:
 If you need to override the bundled VTFCmd, set `VTFCMD` to the full path of a
 different `VTFCmd.exe`.
 
+## Build Repo / GitHub Upload Folder
+
+This project can generate a separate source/build folder named `Github Upload`
+for upload as its own GitHub repository:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\sync_github_upload.ps1
+```
+
+The generated folder contains only the build source, small vendored tools,
+required reference subsets, build instructions, and a download script for large
+assets. It excludes generated `build`, `dist`, and `release` outputs and does
+not commit `blender-4.5.10-windows-x64.zip`, because that file is larger than
+GitHub's normal file-size limit. In the generated repo, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\download_build_assets.ps1
+```
+
+before running from source or building.
+
 ## Build The Program On Windows
 
 The Windows build uses PyInstaller through:
@@ -85,7 +131,9 @@ tools\build_mmd_character_importer_exe.ps1
 Install runtime and build dependencies in the same virtual environment:
 
 ```powershell
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install PySide6 numpy Pillow requests PyOpenGL pyinstaller
 ```
 
@@ -104,6 +152,7 @@ release\MMDCharacterImporter_RUN_ME.txt
 ```
 
 The build also uses `build\` and `dist\` as PyInstaller intermediate folders.
+These folders are generated outputs and can be deleted after a successful build.
 
 ### Portable Folder Build
 
