@@ -24,6 +24,8 @@ MAX_PREVIEW_TRIANGLES = 256000
 DEFAULT_DIRECTIONAL_JIGGLE_ANGLE = 25.0
 LEGACY_DIRECTIONAL_JIGGLE_ANGLE = 45.0
 COMPILED_EXTENSIONS = (".mdl", ".vvd", ".phy", ".dx80.vtx", ".dx90.vtx", ".sw.vtx")
+OPTIONAL_CANONICAL_MODEL_SMDS = ("Body.smd", "Face.smd")
+OPTIONAL_CANONICAL_SMD_WARNING_PREFIX = "Optional canonical SMD missing:"
 SAFE_RE = re.compile(r"[^A-Za-z0-9_]+")
 INTERNAL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_]+$")
 DISPLAY_IDENTIFIER_RE = re.compile(r"^[A-Za-z_ ]+$")
@@ -1003,6 +1005,39 @@ def discover_inputs(input_path: Path) -> dict[str, Any]:
     }
 
 
+def is_auto_port_plan(plan: dict[str, Any]) -> bool:
+    return bool(plan.get("auto_porting") or plan.get("auto_port"))
+
+
+def missing_optional_canonical_smds(step9_dir: Path) -> list[str]:
+    return [name for name in OPTIONAL_CANONICAL_MODEL_SMDS if not (step9_dir / name).exists()]
+
+
+def optional_canonical_smd_warning(missing: list[str]) -> str:
+    return (
+        f"{OPTIONAL_CANONICAL_SMD_WARNING_PREFIX} {', '.join(missing)}. "
+        "This is allowed for models without matching Face/Body bodygroups or flex keys; "
+        "Step 14 will compile the available SMD bodygroups."
+    )
+
+
+def without_optional_canonical_smd_warnings(warnings: list[Any]) -> list[str]:
+    return [
+        str(warning)
+        for warning in warnings
+        if not str(warning).startswith(OPTIONAL_CANONICAL_SMD_WARNING_PREFIX)
+    ]
+
+
+def add_optional_canonical_smd_warnings(warnings: list[str], step9_dir: Path) -> None:
+    missing = missing_optional_canonical_smds(step9_dir)
+    if not missing:
+        return
+    warning = optional_canonical_smd_warning(missing)
+    if warning not in warnings:
+        warnings.append(warning)
+
+
 def load_smds(smd_files: list[str]) -> tuple[list[SmdData], dict[int, SmdNode]]:
     smds = [parse_smd(Path(path), include_triangles=True) for path in smd_files]
     nodes: dict[int, SmdNode] = {}
@@ -1026,9 +1061,7 @@ def analyze(input_path: Path, author: str = "", category: str = "", model_name: 
     smd_files = [path for path in discovered["smd_files"] if Path(path).exists()]
     if not smd_files:
         errors.append(f"No SMD files found in Step 9 export folder: {step9_dir}")
-    for required in ("Body.smd", "Face.smd"):
-        if not (step9_dir / required).exists():
-            errors.append(f"Required Step 9 SMD missing: {required}")
+    add_optional_canonical_smd_warnings(warnings, step9_dir)
     if not (step9_dir / "Physics.smd").exists() and Path(discovered["step8_physics_settings"]).exists():
         errors.append("Physics.smd is missing but Step 8 collision settings exist.")
     texture_manifest = Path(discovered["step12_manifest"])
@@ -1876,10 +1909,6 @@ def validate_plan(plan: dict[str, Any]) -> list[str]:
         errors.append("Missing valid studiomdl.exe.")
     if not Path(str(gmod.get("game_dir") or "")).exists():
         errors.append("Missing valid Garry's Mod game directory.")
-    step9_dir = Path(str(plan.get("step9_dir") or ""))
-    for required in ("Body.smd", "Face.smd"):
-        if not (step9_dir / required).exists():
-            errors.append(f"Required Step 9 SMD missing: {required}")
     jiggles = {str(row.get("bone") or "") for row in plan.get("rows", []) if isinstance(row, dict) and str(row.get("jiggle_type") or "") != "Not Jiggle"}
     ignores = {str(row.get("bone") or "") for row in plan.get("rows", []) if isinstance(row, dict) and str(row.get("jiggle_type") or "") == "Omni Jiggle"}
     for bone in sorted(ignores - jiggles):
@@ -2386,6 +2415,10 @@ def compose(plan_path: Path) -> dict[str, Any]:
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     errors = validate_plan(plan)
     warnings = list(plan.get("warnings", [])) if isinstance(plan.get("warnings"), list) else []
+    if is_auto_port_plan(plan):
+        warnings = without_optional_canonical_smd_warnings(warnings)
+    else:
+        add_optional_canonical_smd_warnings(warnings, Path(str(plan.get("step9_dir") or "")))
     ensure_external_safe_qc_source(plan, warnings)
     plan["warnings"] = warnings
     write_json(plan_path, plan)

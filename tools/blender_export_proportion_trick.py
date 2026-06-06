@@ -542,32 +542,44 @@ def export_source_files(export_dir: Path, processed: bool = False) -> list[Path]
     return exported
 
 
+def raw_smds(raw_dir: Path) -> list[Path]:
+    return sorted(raw_dir.glob("*.smd"), key=lambda path: path.name.lower())
+
+
+def select_primary_raw_smd(raw_dir: Path) -> Path:
+    smd_paths = raw_smds(raw_dir)
+    if not smd_paths:
+        raise RuntimeError(f"Raw export did not write any top-level SMD files under {raw_dir}")
+    for smd_path in smd_paths:
+        if smd_path.name.casefold() == "face.smd":
+            return smd_path
+    return smd_paths[0]
+
+
 def import_raw_smds(raw_dir: Path) -> dict[str, object]:
-    body_smd = raw_dir / "Body.smd"
-    if not body_smd.exists():
-        raise RuntimeError(f"Raw Body.smd is required for proportion trick import but was not found: {body_smd}")
-    log(f"Importing raw Body.smd first: {body_smd}")
-    bpy.ops.import_scene.smd(filepath=str(body_smd), append="NEW_ARMATURE", upAxis="Z")
+    primary_smd = select_primary_raw_smd(raw_dir)
+    log(f"Importing primary raw SMD first: {primary_smd}")
+    bpy.ops.import_scene.smd(filepath=str(primary_smd), append="NEW_ARMATURE", upAxis="Z")
     imported_armatures = [
         obj
         for obj in bpy.data.objects
         if obj.type == "ARMATURE" and obj.name not in {"proportions", "reference_female", "reference_male"}
     ]
     if not imported_armatures:
-        raise RuntimeError("Body.smd import did not create an imported model armature.")
+        raise RuntimeError(f"Primary raw SMD import did not create an imported model armature: {primary_smd.name}")
     gg = imported_armatures[0]
     gg.name = "gg"
     gg.data.name = "gg"
 
-    imported_smds = [body_smd.name]
-    for smd_path in sorted(raw_dir.glob("*.smd"), key=lambda path: path.name.lower()):
-        if smd_path.name.lower() == "body.smd":
+    imported_smds = [primary_smd.name]
+    for smd_path in raw_smds(raw_dir):
+        if smd_path == primary_smd:
             continue
         log(f"Importing raw SMD with VALIDATE: {smd_path.name}")
         set_active_only(gg)
         bpy.ops.import_scene.smd(filepath=str(smd_path), append="VALIDATE", upAxis="Z")
         imported_smds.append(smd_path.name)
-    return {"armature": gg.name, "imported_smds": imported_smds}
+    return {"armature": gg.name, "primary_smd": primary_smd.name, "imported_smds": imported_smds}
 
 
 def import_raw_vtas(raw_dir: Path) -> list[dict[str, object]]:
@@ -922,10 +934,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     bpy.ops.wm.save_as_mainfile(filepath=str(pre_blend))
 
     raw_files = export_source_files(raw_dir, processed=False)
-    required_raw = [name for name in ("Body.smd", "Face.smd", "Physics.smd") if (bpy.data.objects.get(Path(name).stem) is not None)]
-    missing_required_raw = [name for name in required_raw if not (raw_dir / name).exists()]
-    if missing_required_raw:
-        raise RuntimeError("Raw export missed required file(s): " + ", ".join(missing_required_raw))
+    raw_top_level_smds = raw_smds(raw_dir)
+    if not raw_top_level_smds:
+        raise RuntimeError(f"Raw export did not write any top-level SMD files under {raw_dir}")
 
     log(f"Opening proportion trick template: {PROPORTION_TEMPLATE}")
     bpy.ops.wm.open_mainfile(filepath=str(PROPORTION_TEMPLATE))
