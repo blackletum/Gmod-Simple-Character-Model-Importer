@@ -1,5 +1,5 @@
 # MMD Character Importer 
-
+<img width="3840" height="2160" alt="PS1c" src="https://github.com/user-attachments/assets/a7eb4ccd-4369-429c-b620-2450fd1cb335" />
 To developers: This repo can be directly ran from the source without downloading the .exe binary in the release. Please refer to the following instruction:
 
 ## Requirements
