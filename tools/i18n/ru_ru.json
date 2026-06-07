@@ -471,7 +471,7 @@
       "actions.analyze": "2. Анализ VRD",
       "actions.apply": "3. Применить/Экспортировать VRD.",
       "actions.detect": "1. Обнаружение вывода шага 9",
-      "actions.preview": "Восстановить предварительный просмотр",
+      "actions.preview": "Пересоздать предпросмотр для нового набора костей VRD",
       "table.driver_bone": "Драйвер Кость",
       "table.procedural_bone": "Процедурная кость",
       "title": "Сортировать VRD",

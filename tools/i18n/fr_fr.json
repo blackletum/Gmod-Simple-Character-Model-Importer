@@ -471,7 +471,7 @@
       "actions.analyze": "2. Analyser VRD",
       "actions.apply": "3. Appliquer / Exporter VRD",
       "actions.detect": "1. Détecter la sortie de l'étape 9",
-      "actions.preview": "Régénérer l'aperçu",
+      "actions.preview": "Régénérer l'aperçu pour le nouvel ensemble d'os VRD",
       "table.driver_bone": "Os du conducteur",
       "table.procedural_bone": "Os procédural",
       "title": "Trier VRD",

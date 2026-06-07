@@ -563,7 +563,7 @@
       "actions.analyze": "2. Analyze VRD",
       "actions.apply": "3. Apply / Export VRD",
       "actions.detect": "1. Detect Step 9 Output",
-      "actions.preview": "Regenerate Preview",
+      "actions.preview": "Regenerate preview for new set of VRD bones",
       "table.driver_bone": "Driver Bone",
       "table.procedural_bone": "Procedural Bone",
       "title": "Sort VRD",

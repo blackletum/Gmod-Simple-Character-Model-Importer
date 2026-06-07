@@ -20,6 +20,7 @@ from mathutils import Vector
 
 DEFAULT_SCALE_FACTOR = 40.457
 DEFAULT_SOURCE_VERTEX_LIMIT = 65535
+RTX_REMIX_VERTEX_LIMIT = 32767
 SOURCE_VERTEX_LIMIT = DEFAULT_SOURCE_VERTEX_LIMIT
 SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 TRACKING_PREFIXES = ("mci_mat_", "mci_final_")
@@ -90,6 +91,20 @@ FACIAL_SHAPEKEY_TEXT_HINTS = (
     "upper",
     "lower",
 )
+
+
+def is_rtx_remix_vertex_limit(vertex_limit: int) -> bool:
+    return int(vertex_limit or DEFAULT_SOURCE_VERTEX_LIMIT) <= RTX_REMIX_VERTEX_LIMIT
+
+
+def rtx_facial_over_limit_warning(name: str, vertex_count: int, vertex_limit: int) -> str:
+    return (
+        f"{name}: {int(vertex_count):,} vertices exceeds the {int(vertex_limit):,} RTX Remix bodygroup limit. "
+        "It was kept merged to avoid duplicated facial flex controllers. "
+        "The model can still be used in normal Garry's Mod, but this bodygroup is not RTX Remix compatible."
+    )
+
+
 FACIAL_SHAPEKEY_EXACT_NAMES = {
     "a",
     "i",
@@ -555,9 +570,20 @@ def prune_shapekeys() -> dict[str, object]:
             object_report["method"] = "cats_shapekey.shape_key_prune"
             object_report["result"] = list(result)
         except Exception as exc:
-            fallback = fallback_prune_shapekeys(obj)
-            object_report.update(fallback)
+            object_report["method"] = "cats_shapekey.shape_key_prune_failed"
             object_report["warnings"] = list(object_report.get("warnings", [])) + [f"CATS shapekey prune unavailable: {exc}"]
+        fallback = fallback_prune_shapekeys(obj)
+        fallback_removed = list(fallback.get("removed", [])) if isinstance(fallback.get("removed"), list) else []
+        fallback_warnings = list(fallback.get("warnings", [])) if isinstance(fallback.get("warnings"), list) else []
+        existing_removed = list(object_report.get("removed", [])) if isinstance(object_report.get("removed"), list) else []
+        object_report["removed"] = existing_removed + [name for name in fallback_removed if name not in existing_removed]
+        object_report["fallback_removed"] = fallback_removed
+        object_report["fallback_method"] = fallback.get("method", "fallback")
+        if object_report.get("method") == "cats_shapekey.shape_key_prune":
+            object_report["method"] = "cats_shapekey.shape_key_prune+fallback_unused_delta_prune"
+        elif object_report.get("method") == "cats_shapekey.shape_key_prune_failed":
+            object_report["method"] = "fallback_unused_delta_prune"
+        object_report["warnings"] = list(object_report.get("warnings", [])) + fallback_warnings
         report["objects"].append(object_report)
     return report
 
@@ -853,12 +879,15 @@ def collect_sources(vertex_limit: int = DEFAULT_SOURCE_VERTEX_LIMIT) -> list[dic
         shapekey_names = shape_key_names(obj)
         facial_names = facial_shapekey_names(obj)
         facial_text_hint = has_facial_merge_text_hint(obj, materials, tracking)
-        facial_merge_candidate = bool(default_enabled and (facial_names or facial_text_hint))
+        facial_merge_candidate = bool(default_enabled and facial_names)
         facial_merge_reasons: list[str] = []
         if facial_names:
             facial_merge_reasons.append("facial shapekeys")
         if facial_text_hint:
-            facial_merge_reasons.append("face/head material or tracking hint")
+            if facial_names:
+                facial_merge_reasons.append("face/head material or tracking hint")
+            else:
+                facial_merge_reasons.append("face/head material or tracking hint without active facial shapekeys")
         category, confidence, warnings = classify_source(obj, materials, tracking)
         components = component_summaries(obj, include_indices=True)
         component_count = len(components)
@@ -876,11 +905,21 @@ def collect_sources(vertex_limit: int = DEFAULT_SOURCE_VERTEX_LIMIT) -> list[dic
             warnings.append(f"Object has {component_count} disconnected components with tracking groups.")
         if default_enabled and len(obj.data.vertices) > vertex_limit:
             if facial_merge_candidate:
-                warnings.append(
-                    f"Face merge candidate exceeds Source's {vertex_limit:,} vertex limit; merged Face will fail validation if it remains over limit."
-                )
+                if is_rtx_remix_vertex_limit(vertex_limit):
+                    warnings.append(
+                        f"Face merge candidate exceeds the {vertex_limit:,} RTX Remix bodygroup limit; "
+                        "it may be kept merged to preserve facial flexes and only warned as not RTX Remix compatible."
+                    )
+                else:
+                    warnings.append(
+                        f"Face merge candidate exceeds Source's {vertex_limit:,} vertex limit; merged Face will fail validation if it remains over limit."
+                    )
             else:
                 warnings.append(f"Object exceeds Source's {vertex_limit:,} vertex limit and needs additional splitting.")
+        if default_enabled and facial_text_hint and not facial_names:
+            warnings.append(
+                "Not merged into Face because no active facial shapekeys remained after unused shapekey pruning."
+            )
         mat = object_materials[0] if object_materials else (obj.active_material or (obj.data.materials[0] if obj.data.materials else None))
         texture_path = material_texture_path(mat)
         proposed = unique_name(default_bodygroup_name(category, obj.name), used_names, f"Bodygroup_{index:03d}")
@@ -1146,10 +1185,25 @@ def build_facial_merge_report(
         if int(source.get("vertex_count", 0) or 0) > vertex_limit
     ]
     if protected_over_limit:
-        warnings.append("One or more face merge sources exceed the vertex limit and were protected from automatic split.")
+        if is_rtx_remix_vertex_limit(vertex_limit):
+            warnings.append(
+                "One or more face merge sources exceed the RTX Remix bodygroup limit and were protected from automatic split; "
+                "normal Garry's Mod can still use the merged bodygroup."
+            )
+        else:
+            warnings.append("One or more face merge sources exceed the vertex limit and were protected from automatic split.")
     merged_vertex_count = int(merged_group.get("vertex_count", 0) or 0) if isinstance(merged_group, dict) else 0
     if merged_vertex_count > vertex_limit:
-        warnings.append("Merged Face exceeds the vertex limit and will fail validation if applied unchanged.")
+        if is_rtx_remix_vertex_limit(vertex_limit):
+            warnings.append(
+                rtx_facial_over_limit_warning(
+                    str(merged_group.get("proposed_name") or merged_group.get("name") or "Face"),
+                    merged_vertex_count,
+                    vertex_limit,
+                )
+            )
+        else:
+            warnings.append("Merged Face exceeds the vertex limit and will fail validation if applied unchanged.")
     return {
         "enabled": bool(candidates),
         "merged": len(candidates) > 1,
@@ -1975,9 +2029,15 @@ def analyze_scene(
     if clustering_warning:
         warnings.append(clustering_warning)
     if facial_merge.get("protected_over_limit_sources") or facial_merge.get("merged_over_vertex_limit"):
-        warnings.append(
-            "Merged Face exceeds or contains sources over the Source vertex limit; Step 6 apply will fail validation instead of splitting facial flexes."
-        )
+        if is_rtx_remix_vertex_limit(vertex_limit):
+            warnings.append(
+                "Merged Face exceeds or contains sources over the RTX Remix bodygroup limit; "
+                "Step 6 will keep facial flexes merged and warn that the model is not RTX Remix compatible."
+            )
+        else:
+            warnings.append(
+                "Merged Face exceeds or contains sources over the Source vertex limit; Step 6 apply will fail validation instead of splitting facial flexes."
+            )
     analysis = {
         "version": 3,
         "kind": "sort_bodygroups",
@@ -2443,6 +2503,13 @@ def apply_plan(
     output_blend.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(output_blend))
     validation_errors: list[str] = []
+    analysis_warnings = analysis.get("warnings", []) if isinstance(analysis.get("warnings"), list) else []
+    warnings: list[str] = [str(item) for item in analysis_warnings if item]
+
+    def add_warning(message: str) -> None:
+        if message and message not in warnings:
+            warnings.append(message)
+
     if not output_groups:
         validation_errors.append("No output bodygroups were created.")
     seen_group_names: set[str] = set()
@@ -2453,6 +2520,15 @@ def apply_plan(
         seen_group_names.add(group_name)
         if int(group.get("vertex_count", 0) or 0) > vertex_limit:
             if group.get("facial_merge"):
+                if is_rtx_remix_vertex_limit(vertex_limit):
+                    add_warning(
+                        rtx_facial_over_limit_warning(
+                            str(group.get("name") or "Face"),
+                            int(group.get("vertex_count", 0) or 0),
+                            vertex_limit,
+                        )
+                    )
+                    continue
                 validation_errors.append(
                     f"{group.get('name')}: merged Face has {int(group.get('vertex_count', 0) or 0):,} vertices, "
                     f"which exceeds Source's {vertex_limit:,} vertex limit. It was not split because that would duplicate facial flex controllers."
@@ -2476,7 +2552,8 @@ def apply_plan(
         "split_report": split_report,
         "bodygroups": output_groups,
         "bodygroup_count": len(output_groups),
-        "validation": {"ok": not validation_errors, "errors": validation_errors},
+        "warnings": warnings,
+        "validation": {"ok": not validation_errors, "errors": validation_errors, "warnings": warnings},
         "elapsed_seconds": round(time.monotonic() - started, 3),
     }
     write_json(report_json, report)
@@ -2537,7 +2614,10 @@ def validate_manual_bodygroups(
         if vertex_count <= 0 or face_count <= 0:
             object_errors.append(f"{name}: bodygroup has no vertices or faces.")
         if vertex_count > vertex_limit:
-            object_errors.append(f"{name}: {vertex_count:,} vertices exceeds Source's {vertex_limit:,} vertex limit.")
+            if is_rtx_remix_vertex_limit(vertex_limit) and (name == "Face" or object_facial_shapekeys):
+                object_warnings.append(rtx_facial_over_limit_warning(name or "Face", vertex_count, vertex_limit))
+            else:
+                object_errors.append(f"{name}: {vertex_count:,} vertices exceeds Source's {vertex_limit:,} vertex limit.")
         if not [mat for mat in obj.data.materials if mat is not None]:
             object_warnings.append(f"{name}: mesh has no material slots.")
         if not any(group.name.startswith(TRACKING_PREFIXES) for group in obj.vertex_groups):

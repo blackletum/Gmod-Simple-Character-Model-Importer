@@ -48,6 +48,8 @@ class PreviewMaterial:
     texture_path: Path | None
     index_start: int
     index_count: int
+    texture_ref: str = ""
+    missing_texture: bool = False
 
 
 @dataclass
@@ -125,10 +127,13 @@ def _texture_files(model_path: Path) -> list[Path]:
     return sorted(set(out))
 
 
-def _resolve_texture_path(model_path: Path, texture_names: list[str], texture_index: int, lookup: dict[str, Path]) -> Path | None:
+def _texture_ref(texture_names: list[str], texture_index: int) -> str:
     if texture_index < 0 or texture_index >= len(texture_names):
-        return None
-    raw = texture_names[texture_index].replace("\\", "/").strip()
+        return ""
+    return texture_names[texture_index].replace("\\", "/").strip()
+
+
+def _resolve_texture_ref(model_path: Path, raw: str, lookup: dict[str, Path]) -> Path | None:
     if not raw or raw.startswith("*"):
         return None
     relative = Path(raw)
@@ -136,6 +141,10 @@ def _resolve_texture_path(model_path: Path, texture_names: list[str], texture_in
         if candidate.exists():
             return candidate
     return lookup.get(relative.name.lower())
+
+
+def _resolve_texture_path(model_path: Path, texture_names: list[str], texture_index: int, lookup: dict[str, Path]) -> Path | None:
+    return _resolve_texture_ref(model_path, _texture_ref(texture_names, texture_index), lookup)
 
 
 def _read_materials(reader: core.PmxReader, encoding: str, texture_index_size: int, model_path: Path, texture_names: list[str]) -> list[PreviewMaterial]:
@@ -153,6 +162,8 @@ def _read_materials(reader: core.PmxReader, encoding: str, texture_index_size: i
         reader.read_vector_bytes(4)
         reader.read_f32()
         texture_index = reader.read_index(texture_index_size)
+        texture_ref = _texture_ref(texture_names, texture_index)
+        texture_path = _resolve_texture_ref(model_path, texture_ref, texture_lookup)
         reader.read_index(texture_index_size)
         reader.read_i8()
         shared_toon = reader.read_i8()
@@ -166,9 +177,11 @@ def _read_materials(reader: core.PmxReader, encoding: str, texture_index_size: i
             PreviewMaterial(
                 name=name,
                 diffuse=diffuse,
-                texture_path=_resolve_texture_path(model_path, texture_names, texture_index, texture_lookup),
+                texture_path=texture_path,
                 index_start=index_start,
                 index_count=index_count,
+                texture_ref=texture_ref,
+                missing_texture=bool(texture_ref and not texture_ref.startswith("*") and texture_path is None),
             )
         )
         index_start += index_count
@@ -265,7 +278,7 @@ def load_static_preview_model(model_path: Path) -> StaticPreviewModel:
     finally:
         reader.close()
 
-    unresolved = sum(1 for material in materials if material.texture_path is None)
+    unresolved = sum(1 for material in materials if material.missing_texture)
     if unresolved:
         warnings.append(f"{unresolved} material(s) have no resolved preview texture.")
     return StaticPreviewModel(
@@ -347,6 +360,7 @@ class StaticModelPreviewWidget(QOpenGLWidget):
         self._show_bones = True
         self._show_bone_names = False
         self._show_wireframe = False
+        self._hide_missing_texture_materials = False
         self._texture_ids: dict[Path, int] = {}
         self._gl_ready = False
         self._gl_error = ""
@@ -382,6 +396,14 @@ class StaticModelPreviewWidget(QOpenGLWidget):
     def set_wireframe_visible(self, visible: bool) -> None:
         self._show_wireframe = bool(visible)
         self.update()
+
+    def set_hide_missing_texture_materials(self, hidden: bool) -> None:
+        next_value = bool(hidden)
+        if next_value == self._hide_missing_texture_materials:
+            return
+        self._hide_missing_texture_materials = next_value
+        self.update()
+        self._emit_stats()
 
     def reset_front_view(self, *_args: object) -> None:
         self._view_yaw = math.pi
@@ -508,6 +530,8 @@ class StaticModelPreviewWidget(QOpenGLWidget):
         GL.glTexCoordPointer(2, GL.GL_FLOAT, stride, ctypes.c_void_p(base_ptr + 24))
 
         for material in self.model.materials:
+            if self._hide_missing_texture_materials and material.missing_texture:
+                continue
             if material.index_count <= 0 or material.index_start >= len(self.model.indices):
                 continue
             color = material.diffuse
@@ -1531,7 +1555,10 @@ class MaterialPreviewWidget(QOpenGLWidget):
         self.update()
 
     def set_highlighted_collisions(self, uids: set[str] | list[str] | tuple[str, ...]) -> None:
-        self._highlighted_collision_uids = {str(uid) for uid in uids if uid}
+        next_uids = {str(uid) for uid in uids if uid}
+        if next_uids == self._highlighted_collision_uids:
+            return
+        self._highlighted_collision_uids = next_uids
         self.update()
 
     def set_bone_overlay(self, bone_preview: dict[str, object] | list[dict[str, object]] | None) -> None:
@@ -1573,7 +1600,10 @@ class MaterialPreviewWidget(QOpenGLWidget):
         self.update()
 
     def set_highlighted_bone_overlay(self, uids: set[str] | list[str] | tuple[str, ...]) -> None:
-        self._highlighted_bone_uids = {str(uid) for uid in uids if uid}
+        next_uids = {str(uid) for uid in uids if uid}
+        if next_uids == self._highlighted_bone_uids:
+            return
+        self._highlighted_bone_uids = next_uids
         self.update()
 
     def set_flex_plan(self, plan: dict[str, object] | None) -> None:

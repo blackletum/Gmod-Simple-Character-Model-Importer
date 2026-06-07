@@ -471,7 +471,7 @@
       "actions.analyze": "2. VRD 분석",
       "actions.apply": "3. 적용/내보내기 VRD",
       "actions.detect": "1. 9단계 출력 감지",
-      "actions.preview": "미리보기 재생성",
+      "actions.preview": "새 VRD 본 세트의 미리보기 재생성",
       "table.driver_bone": "드라이버 본",
       "table.procedural_bone": "절차적 뼈",
       "title": "VRD 정렬",

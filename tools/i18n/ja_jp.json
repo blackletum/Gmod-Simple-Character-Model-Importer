@@ -471,7 +471,7 @@
       "actions.analyze": "2. VRDを分析する",
       "actions.apply": "3. 適用/エクスポート VRD",
       "actions.detect": "1. ステップ 9 の出力を検出",
-      "actions.preview": "プレビューを再生成",
+      "actions.preview": "新しいVRDボーンセットのプレビューを再生成",
       "table.driver_bone": "ドライバーボーン",
       "table.procedural_bone": "プロシージャルボーン",
       "title": "ソート VRD",

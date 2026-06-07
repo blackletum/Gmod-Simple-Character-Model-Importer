@@ -834,6 +834,21 @@ def parse_version_from_blender_zip_name(name: str) -> str:
     return match.group(1)
 
 
+def infer_blender_version_from_path(path: Path | str) -> str | None:
+    text = str(path)
+    for pattern in (
+        r"blender[-_/\\](4\.5\.\d+)",
+        r"blender-(4\.5\.\d+)",
+        r"[\\/](4\.5\.\d+)[\\/]",
+    ):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    if re.search(r"blender[-_/\\]4\.5(?:[\\/]|$)|[\\/]4\.5[\\/]", text, re.IGNORECASE):
+        return "4.5"
+    return None
+
+
 def parse_version_tuple(version: str) -> tuple[int, int, int]:
     parts = [int(part) for part in re.findall(r"\d+", version)[:3]]
     while len(parts) < 3:
@@ -880,21 +895,33 @@ def hidden_subprocess_kwargs() -> dict[str, object]:
     }
 
 
-def blender_version(blender_exe: Path) -> str:
-    completed = subprocess.run(
-        [str(blender_exe), "--version"],
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        timeout=30,
-        **hidden_subprocess_kwargs(),
-    )
-    match = re.search(r"Blender\s+(\d+\.\d+(?:\.\d+)?)", completed.stdout or "")
+def blender_version_details(blender_exe: Path) -> tuple[str, str, str]:
+    output = ""
+    try:
+        completed = subprocess.run(
+            [str(blender_exe), "--version"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+            **hidden_subprocess_kwargs(),
+        )
+        output = completed.stdout or ""
+    except Exception as exc:
+        output = str(exc)
+    match = re.search(r"Blender\s+(\d+\.\d+(?:\.\d+)?)", output)
     if not match:
-        raise RuntimeError(f"could not determine Blender version from {blender_exe}\n{completed.stdout}")
-    return match.group(1)
+        inferred = infer_blender_version_from_path(blender_exe)
+        if inferred:
+            return inferred, "path", output
+        raise RuntimeError(f"could not determine Blender version from {blender_exe}\n{output}")
+    return match.group(1), "command", output
+
+
+def blender_version(blender_exe: Path) -> str:
+    return blender_version_details(blender_exe)[0]
 
 
 def path_is_under(path: Path, root: Path) -> bool:
@@ -918,7 +945,13 @@ def setup_state_is_current(state: dict[str, object]) -> Path | None:
         return None
     if not is_managed_blender_path(blender):
         return None
-    if str(state.get("blender_version") or "").split(".")[:2] != ["4", "5"]:
+    state_version = str(state.get("blender_version") or "")
+    if parse_version_tuple(state_version)[:2] != (4, 5):
+        inferred_version = infer_blender_version_from_path(blender)
+        if parse_version_tuple(inferred_version or "")[:2] != (4, 5):
+            return None
+        state["blender_version"] = inferred_version
+    if parse_version_tuple(str(state.get("blender_version") or ""))[:2] != (4, 5):
         return None
     if state.get("plugin_fingerprints") != plugin_fingerprints():
         return None
@@ -1330,12 +1363,25 @@ def reusable_managed_blender_from_state(state: dict[str, object], progress: Prog
         emit(progress, f"Ignoring saved system Blender path; using bundled/managed Blender by default: {candidate}")
         return None
     try:
-        candidate_version = blender_version(candidate)
+        candidate_version, version_source, _version_output = blender_version_details(candidate)
         if parse_version_tuple(candidate_version)[:2] == (4, 5):
+            if version_source != "command":
+                emit(
+                    progress,
+                    "WARNING: Could not read managed Blender version from --version output; "
+                    f"using version inferred from folder name: {candidate_version}.",
+                )
             emit(progress, f"Reusing existing managed Blender for setup repair: {candidate}")
             return candidate
-    except Exception:
-        return None
+    except Exception as exc:
+        inferred_version = infer_blender_version_from_path(candidate)
+        if parse_version_tuple(inferred_version or "")[:2] == (4, 5):
+            emit(
+                progress,
+                "WARNING: Could not read managed Blender version from --version output; "
+                f"using version inferred from folder name: {inferred_version}. Details: {exc}",
+            )
+            return candidate
     return None
 
 
@@ -1354,9 +1400,36 @@ def ensure_portable_blender(progress: ProgressCallback | None = None) -> SetupRe
     blender = reusable_managed_blender_from_state(state, progress)
     if blender is None:
         blender = find_managed_blender(progress)
-    version = blender_version(blender)
+    try:
+        version, version_source, _version_output = blender_version_details(blender)
+    except Exception as exc:
+        inferred_version = infer_blender_version_from_path(blender)
+        if is_managed_blender_path(blender) and parse_version_tuple(inferred_version or "")[:2] == (4, 5):
+            version = inferred_version or "4.5"
+            version_source = "path"
+            emit(
+                progress,
+                "WARNING: Could not read managed Blender version from --version output; "
+                f"using version inferred from folder name: {version}. Details: {exc}",
+            )
+        elif is_managed_blender_path(blender):
+            version = "4.5"
+            version_source = "managed-default"
+            emit(
+                progress,
+                "WARNING: Could not determine managed Blender version; assuming bundled Blender 4.5.x "
+                f"from managed install path and continuing. Details: {exc}",
+            )
+        else:
+            raise
     if parse_version_tuple(version)[:2] != (4, 5):
         raise RuntimeError(f"Blender {version} is not supported; expected Blender 4.5.x for the bundled CATS add-on")
+    if version_source != "command" and version_source != "managed-default":
+        emit(
+            progress,
+            "WARNING: Could not read managed Blender version from --version output; "
+            f"using version inferred from folder name: {version}.",
+        )
     setup_output = verify_and_install_addons(blender, progress=progress, check_only=False)
     write_setup_state(
         {

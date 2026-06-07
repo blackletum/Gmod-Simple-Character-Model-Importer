@@ -471,7 +471,7 @@
       "actions.analyze": "2. Analizar VRD",
       "actions.apply": "3. Aplicar / Exportar VRD",
       "actions.detect": "1. Detectar la salida del paso 9",
-      "actions.preview": "Regenerar vista previa",
+      "actions.preview": "Regenerar vista previa para el nuevo conjunto de huesos VRD",
       "table.driver_bone": "Hueso del conductor",
       "table.procedural_bone": "Hueso procesal",
       "title": "Ordenar VRD",

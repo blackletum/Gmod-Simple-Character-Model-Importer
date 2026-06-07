@@ -510,7 +510,7 @@
       "actions.analyze": "2. 分析 VRD",
       "actions.apply": "3. 應用 / 導出 VRD",
       "actions.detect": "1. 檢測步驟 9 輸出",
-      "actions.preview": "重新生成預覽",
+      "actions.preview": "為新的 VRD 骨骼集合重新生成預覽",
       "table.driver_bone": "驅動骨骼",
       "table.procedural_bone": "程序骨骼",
       "title": "整理 VRD",

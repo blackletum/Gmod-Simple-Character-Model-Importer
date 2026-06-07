@@ -16,6 +16,7 @@ import time
 import traceback
 import urllib.error
 import urllib.request
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Iterable
@@ -1616,7 +1617,7 @@ class VrdApplyWorker(QtCore.QThread):
     def __init__(self, input_dir: str, plan: dict[str, object]) -> None:
         super().__init__()
         self.input_dir = input_dir
-        self.plan = plan
+        self.plan = deepcopy(plan)
         self.cancel_requested = False
 
     def cancel(self) -> None:
@@ -1667,7 +1668,7 @@ class VrdPreviewWorker(QtCore.QThread):
     def __init__(self, input_dir: str, plan: dict[str, object]) -> None:
         super().__init__()
         self.input_dir = input_dir
-        self.plan = plan
+        self.plan = deepcopy(plan)
         self.cancel_requested = False
 
     def cancel(self) -> None:
@@ -1700,6 +1701,7 @@ class VrdPreviewWorker(QtCore.QThread):
                     "plan_data": result.plan,
                     "preview_data": result.preview,
                     "report_data": result.report,
+                    "requested_plan": self.plan,
                     "blender": str(result.setup.blender_exe),
                     "blender_version": result.setup.version,
                     "setup_reused": result.setup.reused,
@@ -2095,6 +2097,20 @@ class FullImportWorker(QtCore.QThread):
             raise RuntimeError(f"Step {step} {context} failed: {'; '.join(str(item) for item in errors)}")
         if status in {"failed", "failure", "error", "incomplete"}:
             raise RuntimeError(f"Step {step} {context} returned status '{status}'.")
+        report_warnings: list[object] = []
+        validation_warnings = validation.get("warnings") if isinstance(validation, dict) else []
+        if isinstance(validation_warnings, list):
+            report_warnings.extend(validation_warnings)
+        top_warnings = report.get("warnings") if isinstance(report.get("warnings"), list) else []
+        if isinstance(top_warnings, list):
+            report_warnings.extend(top_warnings)
+        for warning in report_warnings:
+            text = str(warning).strip()
+            if not text:
+                continue
+            labelled = f"Step {step} ({context}): {text}"
+            if labelled not in self.optional_warnings:
+                self.optional_warnings.append(labelled)
 
     def _optional(self, step: int, title: str, fn: Callable[[], None]) -> None:
         try:
@@ -2693,6 +2709,8 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self._hover_collision_source_bodygroup = ""
         self._hover_collision_uid = ""
         self._hover_vrd_uid = ""
+        self._vrd_entries_by_uid: dict[str, dict[str, object]] = {}
+        self._last_vrd_preview_state: tuple[str, frozenset[str], str, frozenset[str]] | None = None
         self._hover_texture_uid = ""
         self._hover_icon_file = ""
         self._hover_qc_bone_uid = ""
@@ -3405,7 +3423,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
             8: {"title": "Sort Collision", "requires": [7], "next": 9, "ready": ["collision_bones_button", "collision_sources_button", "collision_analyze_button"], "run": ["collision_bones_button", "collision_sources_button", "collision_analyze_button", "collision_apply_button"], "numbered": [("detect_flex_blend_button", "1. Detect Step 7 Output"), ("collision_bones_button", "2. Select CoACD Bones"), ("collision_sources_button", "3. Select CoACD Bodygroups"), ("collision_analyze_button", "4. Analyze Collision"), ("collision_apply_button", "5. Apply Collision")]},
             9: {"title": "Export Proportion Trick", "requires": [8], "next": 10, "ready": ["proportion_run_button"], "run": ["proportion_run_button"], "numbered": [("detect_collision_blend_button", "1. Detect Step 8 Output"), ("proportion_run_button", "2. Run Step 9")]},
             10: {"title": "Sort c_arms", "requires": [9], "next": 11, "ready": ["carms_run_button"], "run": ["carms_run_button"], "numbered": [("detect_proportion_export_button", "1. Detect Step 9 Output"), ("carms_run_button", "2. Run Step 10")]},
-            11: {"title": "Sort VRD", "requires": [9], "next": 12, "ready": ["vrd_analyze_button"], "run": ["vrd_analyze_button", "vrd_apply_button"], "numbered": [("detect_vrd_step9_button", "1. Detect Step 9 Output"), ("vrd_analyze_button", "2. Analyze VRD"), ("vrd_apply_button", "3. Apply / Export VRD")]},
+            11: {"title": "Sort VRD", "requires": [9], "next": 12, "ready": ["vrd_analyze_button"], "run": ["vrd_analyze_button", "vrd_regenerate_button", "vrd_apply_button"], "numbered": [("detect_vrd_step9_button", "1. Detect Step 9 Output"), ("vrd_analyze_button", "2. Analyze VRD"), ("vrd_regenerate_button", "3. Regenerate preview for new set of VRD bones"), ("vrd_apply_button", "4. Apply / Export VRD")]},
             12: {"title": "Param Texture", "requires": [5], "next": 13, "ready": ["texture_analyze_button"], "run": ["texture_analyze_button", "texture_process_button"], "numbered": [("detect_texture_mapping_button", "1. Detect Material Mapping"), ("texture_analyze_button", "2. Analyze Textures"), ("texture_process_button", "3. Process Textures")]},
             13: {"title": "Sort Icons and Arts", "requires": [1], "next": 14, "ready": ["icon_generate_button", "icon_custom_button"], "run": ["icon_generate_button", "icon_custom_button"], "numbered": [("detect_icon_step1_button", "1. Detect Step 1 Output"), ("icon_generate_button", "2. Generate Icons"), ("icon_custom_button", "2B. Use Custom Image")]},
             14: {"title": "Sort QC and Compile", "requires": [9], "optional": [10, 11, 12, 13], "next": 15, "ready": ["qc_analyze_button"], "run": ["qc_analyze_button", "qc_compile_button"], "numbered": [("detect_qc_outputs_button", "1. Detect Step Outputs"), ("detect_qc_gmod_button", "2. Detect GMod"), ("qc_analyze_button", "3. Analyze QC"), ("qc_compile_button", "4. Compile And Compose")]},
@@ -4327,6 +4345,8 @@ class ImporterWindow(QtWidgets.QMainWindow):
         preview_layout = QtWidgets.QVBoxLayout(self.main_preview_group)
         if StaticModelPreviewWidget is not None:
             self.main_model_preview = StaticModelPreviewWidget()
+            if hasattr(self.main_model_preview, "set_hide_missing_texture_materials"):
+                self.main_model_preview.set_hide_missing_texture_materials(True)
             self.main_preview_status_label = QtWidgets.QLabel("Preview idle")
             self.main_preview_status_label.setObjectName("fieldHint")
             self.main_model_preview.statsChanged.connect(self.main_preview_status_label.setText)
@@ -4557,6 +4577,8 @@ class ImporterWindow(QtWidgets.QMainWindow):
         preview_layout = QtWidgets.QVBoxLayout(self.preview_group)
         if StaticModelPreviewWidget is not None:
             self.model_preview = StaticModelPreviewWidget()
+            if hasattr(self.model_preview, "set_hide_missing_texture_materials"):
+                self.model_preview.set_hide_missing_texture_materials(True)
             self.preview_status_label = QtWidgets.QLabel("Preview idle")
             self.preview_status_label.setObjectName("fieldHint")
             self.preview_status_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -6590,7 +6612,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.vrd_apply_button.setObjectName("importButton")
         self.vrd_apply_button.setEnabled(False)
         self.vrd_apply_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MediaPlay))
-        self.vrd_regenerate_button = QtWidgets.QPushButton("Regenerate Preview")
+        self.vrd_regenerate_button = QtWidgets.QPushButton("Regenerate preview for new set of VRD bones")
         self.vrd_regenerate_button.setEnabled(False)
         self.vrd_regenerate_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_BrowserReload))
         self.vrd_cancel_button = QtWidgets.QPushButton("Cancel")
@@ -14689,6 +14711,8 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.current_vrd_analysis = None
         self.current_vrd_plan = None
         self.current_vrd_preview = None
+        self._vrd_entries_by_uid = {}
+        self._last_vrd_preview_state = None
         self.sync_vrd_intensity_controls_from_plan()
         self.vrd_table.setRowCount(0)
         self.vrd_apply_button.setEnabled(False)
@@ -14806,11 +14830,13 @@ class ImporterWindow(QtWidgets.QMainWindow):
         if not self.current_vrd_plan:
             self.show_error("Apply VRD failed", "Analyze VRD first or load an existing VRD plan.")
             return
+        self.commit_vrd_table_to_plan()
         self.update_vrd_plan_intensity_from_controls()
         errors = self.validate_vrd_plan_for_gui()
         if errors:
             self.show_error("Apply VRD failed", "\n".join(errors))
             return
+        export_plan = deepcopy(self.current_vrd_plan)
         self.set_step_working(11, "Preparing Step 11 VRD export")
         self.vrd_log.clear()
         self.set_vrd_progress(0, "Queued", "Preparing VRD export", "#58a6ff")
@@ -14819,7 +14845,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.vrd_regenerate_button.setEnabled(False)
         self.detect_vrd_step9_button.setEnabled(False)
         self.vrd_cancel_button.setEnabled(True)
-        self.worker = VrdApplyWorker(input_raw, self.current_vrd_plan)
+        self.worker = VrdApplyWorker(input_raw, export_plan)
         self.worker.log.connect(self.append_vrd_log)
         self.worker.done.connect(self.vrd_apply_done)
         self.worker.failed.connect(self.vrd_failed)
@@ -14984,45 +15010,58 @@ class ImporterWindow(QtWidgets.QMainWindow):
     def populate_vrd_table(self, plan: dict[str, object]) -> None:
         rows = [entry for entry in plan.get("rows", []) if isinstance(entry, dict)] if isinstance(plan.get("rows"), list) else []
         self._updating_vrd_table = True
-        self.vrd_table.setRowCount(len(rows))
-        for row_index, entry in enumerate(rows):
-            uid = str(entry.get("uid") or f"vrd_{row_index + 1:03d}")
-            entry["uid"] = uid
-            entry["frame_weight_overrides"] = self.normalized_vrd_frame_weight_overrides(entry.get("frame_weight_overrides"))
-            use_item = QtWidgets.QTableWidgetItem("")
-            use_item.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsUserCheckable | QtCore.Qt.ItemFlag.ItemIsSelectable)
-            use_item.setCheckState(QtCore.Qt.CheckState.Checked if entry.get("enabled", True) else QtCore.Qt.CheckState.Unchecked)
-            use_item.setData(QtCore.Qt.ItemDataRole.UserRole, uid)
-            self.vrd_table.setItem(row_index, 0, use_item)
-            values = [
-                str(entry.get("procedural_bone") or ""),
-                str(entry.get("driver_bone") or "ValveBiped.Bip01_L_Thigh"),
-                f"{float(entry.get('angle', 90.0) or 90.0):.1f}",
-                self.format_vrd_frame_weight_cell(entry, 10),
-                self.format_vrd_frame_weight_cell(entry, 20),
-                self.format_vrd_frame_weight_cell(entry, 30),
-                str(entry.get("side") or ""),
-                f"{float(entry.get('confidence', 0.0) or 0.0):.3f}",
-                f"{int(entry.get('weighted_vertices', 0) or 0):,}",
-                ", ".join(str(item) for item in entry.get("source_objects", []) if item) if isinstance(entry.get("source_objects"), list) else "",
-                "; ".join(str(item) for item in entry.get("warnings", []) if item) if isinstance(entry.get("warnings"), list) else "",
-            ]
-            for offset, value in enumerate(values, start=1):
-                item = QtWidgets.QTableWidgetItem(value)
-                item.setData(QtCore.Qt.ItemDataRole.UserRole, uid)
-                if value:
-                    item.setToolTip(value)
-                if offset in (1, 2, 3, 4, 5, 6):
-                    item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsEditable)
-                else:
-                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
-                self.vrd_table.setItem(row_index, offset, item)
-        self._updating_vrd_table = False
-        self.vrd_table.resizeRowsToContents()
+        self.vrd_table.setUpdatesEnabled(False)
+        signal_blocker = QtCore.QSignalBlocker(self.vrd_table)
+        try:
+            self._vrd_entries_by_uid = {}
+            self._last_vrd_preview_state = None
+            self.vrd_table.setRowCount(len(rows))
+            for row_index, entry in enumerate(rows):
+                uid = str(entry.get("uid") or f"vrd_{row_index + 1:03d}")
+                entry["uid"] = uid
+                self._vrd_entries_by_uid[uid] = entry
+                entry["frame_weight_overrides"] = self.normalized_vrd_frame_weight_overrides(entry.get("frame_weight_overrides"))
+                use_item = QtWidgets.QTableWidgetItem("")
+                use_item.setFlags(QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                use_item.setCheckState(QtCore.Qt.CheckState.Checked if entry.get("enabled", True) else QtCore.Qt.CheckState.Unchecked)
+                use_item.setData(QtCore.Qt.ItemDataRole.UserRole, uid)
+                self.vrd_table.setItem(row_index, 0, use_item)
+                values = [
+                    str(entry.get("procedural_bone") or ""),
+                    str(entry.get("driver_bone") or "ValveBiped.Bip01_L_Thigh"),
+                    f"{float(entry.get('angle', 90.0) or 90.0):.1f}",
+                    self.format_vrd_frame_weight_cell(entry, 10),
+                    self.format_vrd_frame_weight_cell(entry, 20),
+                    self.format_vrd_frame_weight_cell(entry, 30),
+                    str(entry.get("side") or ""),
+                    f"{float(entry.get('confidence', 0.0) or 0.0):.3f}",
+                    f"{int(entry.get('weighted_vertices', 0) or 0):,}",
+                    ", ".join(str(item) for item in entry.get("source_objects", []) if item) if isinstance(entry.get("source_objects"), list) else "",
+                    "; ".join(str(item) for item in entry.get("warnings", []) if item) if isinstance(entry.get("warnings"), list) else "",
+                ]
+                for offset, value in enumerate(values, start=1):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setData(QtCore.Qt.ItemDataRole.UserRole, uid)
+                    if value:
+                        item.setToolTip(value)
+                    if offset in (1, 2, 3, 4, 5, 6):
+                        item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsEditable)
+                    else:
+                        item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
+                    self.vrd_table.setItem(row_index, offset, item)
+            self.vrd_table.resizeRowsToContents()
+        finally:
+            del signal_blocker
+            self.vrd_table.setUpdatesEnabled(True)
+            self._updating_vrd_table = False
 
     def vrd_entry_for_uid(self, uid: str) -> dict[str, object] | None:
+        cached = self._vrd_entries_by_uid.get(str(uid or ""))
+        if cached is not None:
+            return cached
         for entry in self.vrd_entries():
             if str(entry.get("uid") or "") == uid:
+                self._vrd_entries_by_uid[uid] = entry
                 return entry
         return None
 
@@ -15033,10 +15072,12 @@ class ImporterWindow(QtWidgets.QMainWindow):
         entry = self.vrd_entry_for_uid(uid)
         if not entry:
             return
+        refresh_preview_state = False
         if item.column() == 0:
             entry["enabled"] = item.checkState() == QtCore.Qt.CheckState.Checked
         elif item.column() == 1:
             entry["procedural_bone"] = item.text().strip()
+            refresh_preview_state = True
         elif item.column() == 2:
             text = item.text().strip()
             if text not in {"ValveBiped.Bip01_L_Thigh", "ValveBiped.Bip01_R_Thigh"}:
@@ -15072,7 +15113,111 @@ class ImporterWindow(QtWidgets.QMainWindow):
                     overrides[str(frame)] = value
                     entry["frame_weight_overrides"] = overrides
                     self.set_vrd_weight_item_text(item, f"{value:.2f}")
-        self.refresh_vrd_preview_state()
+        if refresh_preview_state:
+            self.refresh_vrd_preview_state()
+
+    def commit_vrd_table_editor(self) -> None:
+        focus = QtWidgets.QApplication.focusWidget()
+        if focus is not None and hasattr(self, "vrd_table") and self.vrd_table.isAncestorOf(focus):
+            try:
+                self.vrd_table.commitData(focus)
+            except Exception:
+                pass
+            try:
+                self.vrd_table.closeEditor(focus, QtWidgets.QAbstractItemDelegate.EndEditHint.NoHint)
+            except Exception:
+                pass
+            try:
+                focus.clearFocus()
+                self.vrd_table.setFocus(QtCore.Qt.FocusReason.OtherFocusReason)
+            except Exception:
+                pass
+        QtWidgets.QApplication.processEvents(QtCore.QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+
+    def commit_vrd_table_to_plan(self) -> None:
+        if not self.current_vrd_plan:
+            return
+        self.commit_vrd_table_editor()
+        existing_rows = self.vrd_entries()
+        by_uid = {str(entry.get("uid") or ""): entry for entry in existing_rows if str(entry.get("uid") or "")}
+        rows: list[dict[str, object]] = []
+        for row_index in range(self.vrd_table.rowCount()):
+            use_item = self.vrd_table.item(row_index, 0)
+            uid = str(use_item.data(QtCore.Qt.ItemDataRole.UserRole) or "") if use_item else ""
+            if not uid:
+                continue
+            entry = by_uid.get(uid, {"uid": uid})
+            entry["uid"] = uid
+            entry["enabled"] = use_item.checkState() == QtCore.Qt.CheckState.Checked if use_item else bool(entry.get("enabled", True))
+            procedural_item = self.vrd_table.item(row_index, 1)
+            if procedural_item:
+                entry["procedural_bone"] = procedural_item.text().strip()
+            driver_item = self.vrd_table.item(row_index, 2)
+            if driver_item:
+                driver_text = driver_item.text().strip()
+                if driver_text not in {"ValveBiped.Bip01_L_Thigh", "ValveBiped.Bip01_R_Thigh"}:
+                    driver_text = "ValveBiped.Bip01_L_Thigh" if "_L_" in driver_text else "ValveBiped.Bip01_R_Thigh"
+                entry["driver_bone"] = driver_text
+            angle_item = self.vrd_table.item(row_index, 3)
+            if angle_item:
+                try:
+                    entry["angle"] = float(angle_item.text().strip())
+                except Exception:
+                    entry["angle"] = float(entry.get("angle", 90.0) or 90.0)
+            overrides = self.normalized_vrd_frame_weight_overrides(entry.get("frame_weight_overrides"))
+            for frame, column in VRD_WEIGHT_COLUMNS.items():
+                weight_item = self.vrd_table.item(row_index, column)
+                if not weight_item:
+                    continue
+                text = weight_item.text().strip().lower()
+                if not text or text == "auto" or text.startswith("auto "):
+                    overrides[str(frame)] = None
+                    continue
+                current_override = overrides.get(str(frame))
+                current_display = self.format_vrd_frame_weight_cell(entry, frame).strip().lower()
+                if current_override is None and text == current_display:
+                    continue
+                try:
+                    overrides[str(frame)] = max(0.0, min(1.0, float(text)))
+                except Exception:
+                    overrides[str(frame)] = None
+            entry["frame_weight_overrides"] = overrides
+            rows.append(entry)
+        self.current_vrd_plan["rows"] = rows
+        self._vrd_entries_by_uid = {str(entry.get("uid") or ""): entry for entry in rows if str(entry.get("uid") or "")}
+
+    def merge_vrd_preview_plan_with_user_plan(
+        self,
+        preview_plan: dict[str, object],
+        user_plan: dict[str, object],
+    ) -> dict[str, object]:
+        if not isinstance(preview_plan, dict):
+            return deepcopy(user_plan)
+        if not isinstance(user_plan, dict):
+            return deepcopy(preview_plan)
+        merged_plan = deepcopy(preview_plan)
+        preview_rows = preview_plan.get("rows", []) if isinstance(preview_plan.get("rows"), list) else []
+        user_rows = user_plan.get("rows", []) if isinstance(user_plan.get("rows"), list) else []
+        preview_by_uid = {
+            str(row.get("uid") or ""): row
+            for row in preview_rows
+            if isinstance(row, dict) and str(row.get("uid") or "")
+        }
+        merged_rows: list[dict[str, object]] = []
+        preserve_fields = ("enabled", "procedural_bone", "driver_bone", "angle", "frame_weight_overrides")
+        for user_row in user_rows:
+            if not isinstance(user_row, dict):
+                continue
+            uid = str(user_row.get("uid") or "")
+            row = deepcopy(preview_by_uid.get(uid, user_row))
+            row["uid"] = uid
+            for field in preserve_fields:
+                if field in user_row:
+                    row[field] = deepcopy(user_row[field])
+            merged_rows.append(row)
+        merged_plan["rows"] = merged_rows
+        merged_plan["intensity_multipliers"] = self.normalized_vrd_intensity_multipliers(user_plan.get("intensity_multipliers"))
+        return merged_plan
 
     def selected_vrd_uids(self) -> set[str]:
         rows = sorted({index.row() for index in self.vrd_table.selectionModel().selectedRows()})
@@ -15090,7 +15235,8 @@ class ImporterWindow(QtWidgets.QMainWindow):
         out: set[str] = set()
         if not selected:
             return out
-        for entry in self.vrd_entries():
+        entries = self._vrd_entries_by_uid.values() if self._vrd_entries_by_uid else self.vrd_entries()
+        for entry in entries:
             uid = str(entry.get("uid") or "")
             bone = str(entry.get("procedural_bone") or "").strip()
             if uid in selected and bone:
@@ -15250,6 +15396,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         if hasattr(self.vrd_preview, "set_bone_overlay"):
             bone_preview = self.current_vrd_preview.get("bone_preview", {})
             self.vrd_preview.set_bone_overlay(bone_preview if isinstance(bone_preview, dict) else {})
+        self._last_vrd_preview_state = None
         self.refresh_vrd_preview_overlay()
         self.refresh_vrd_preview_state()
 
@@ -15258,6 +15405,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
             return
         frame = [0, 10, 20, 30][max(0, min(3, self.vrd_frame_slider.value()))] if hasattr(self, "vrd_frame_slider") else 0
         self.vrd_preview.set_collision_overlay(self.blended_vrd_overlay(frame))
+        self._last_vrd_preview_state = None
         self.refresh_vrd_preview_state()
 
     def refresh_vrd_preview_state(self) -> None:
@@ -15267,12 +15415,18 @@ class ImporterWindow(QtWidgets.QMainWindow):
         selected = self.selected_vrd_uids()
         if not uid and selected:
             uid = sorted(selected)[0]
+        hovered_bone = self.vrd_procedural_bone_for_uid(uid)
+        highlighted_bones = self.vrd_procedural_bones_for_uids(selected)
+        state = (uid, frozenset(selected), hovered_bone, frozenset(highlighted_bones))
+        if state == self._last_vrd_preview_state:
+            return
+        self._last_vrd_preview_state = state
         self.vrd_preview.set_hovered_collision(uid)
         self.vrd_preview.set_highlighted_collisions(selected)
         if hasattr(self.vrd_preview, "set_hovered_bone_overlay"):
-            self.vrd_preview.set_hovered_bone_overlay(self.vrd_procedural_bone_for_uid(uid))
+            self.vrd_preview.set_hovered_bone_overlay(hovered_bone)
         if hasattr(self.vrd_preview, "set_highlighted_bone_overlay"):
-            self.vrd_preview.set_highlighted_bone_overlay(self.vrd_procedural_bones_for_uids(selected))
+            self.vrd_preview.set_highlighted_bone_overlay(highlighted_bones)
 
     def add_vrd_row(self) -> None:
         if self.current_vrd_plan is None:
@@ -15342,11 +15496,13 @@ class ImporterWindow(QtWidgets.QMainWindow):
         if not self.current_vrd_plan:
             self.show_error("Regenerate VRD preview failed", "Analyze VRD first or load an existing VRD plan.")
             return
+        self.commit_vrd_table_to_plan()
         self.update_vrd_plan_intensity_from_controls()
         errors = self.validate_vrd_plan_for_gui()
         if errors:
             self.show_error("Regenerate VRD preview failed", "\n".join(errors))
             return
+        preview_plan = deepcopy(self.current_vrd_plan)
         self.refresh_vrd_preview_state()
         self.set_step_working(11, "Regenerating Step 11 VRD preview")
         self.vrd_log.clear()
@@ -15356,7 +15512,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.vrd_regenerate_button.setEnabled(False)
         self.detect_vrd_step9_button.setEnabled(False)
         self.vrd_cancel_button.setEnabled(True)
-        self.worker = VrdPreviewWorker(input_raw, self.current_vrd_plan)
+        self.worker = VrdPreviewWorker(input_raw, preview_plan)
         self.worker.log.connect(self.append_vrd_log)
         self.worker.done.connect(self.vrd_preview_done)
         self.worker.failed.connect(self.vrd_preview_failed)
@@ -15376,7 +15532,19 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.vrd_preview_label.setText(str(result.get("preview", "")))
         self.vrd_log_label.setText(str(result.get("log", "")))
         self.open_vrd_folder_button.setEnabled(bool(self.vrd_output_dir))
-        self.current_vrd_plan = result.get("plan_data") if isinstance(result.get("plan_data"), dict) else self.current_vrd_plan
+        returned_plan = result.get("plan_data") if isinstance(result.get("plan_data"), dict) else {}
+        requested_plan = result.get("requested_plan") if isinstance(result.get("requested_plan"), dict) else self.current_vrd_plan
+        if isinstance(returned_plan, dict) and isinstance(requested_plan, dict):
+            self.current_vrd_plan = self.merge_vrd_preview_plan_with_user_plan(returned_plan, requested_plan)
+        elif isinstance(requested_plan, dict):
+            self.current_vrd_plan = requested_plan
+        if isinstance(self.current_vrd_plan, dict):
+            plan_path_text = str(result.get("plan") or "").strip()
+            if plan_path_text:
+                try:
+                    Path(plan_path_text).write_text(json.dumps(self.current_vrd_plan, ensure_ascii=False, indent=2), encoding="utf-8")
+                except Exception as exc:
+                    self.append_vrd_log(f"Warning: could not save edited VRD plan after preview: {exc}")
         self.current_vrd_preview = result.get("preview_data") if isinstance(result.get("preview_data"), dict) else self.current_vrd_preview
         self.populate_vrd_table(self.current_vrd_plan or {})
         self.sync_vrd_intensity_controls_from_plan()
