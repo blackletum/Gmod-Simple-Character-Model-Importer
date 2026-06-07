@@ -39,17 +39,17 @@ components.
 
 ### Option A: Run A Packaged Release
 
-If `release\MMDCharacterImporter.exe` already exists, no Python environment is
+If `release\GmodSimpleMMDCharacterImporter.exe` already exists, no Python environment is
 required. Launch it directly:
 
 ```powershell
-.\release\MMDCharacterImporter.exe
+.\release\GmodSimpleMMDCharacterImporter.exe
 ```
 
 For the portable-folder build, keep `_internal` beside the executable and run:
 
 ```powershell
-.\release\MMDCharacterImporter_portable\MMDCharacterImporter.exe
+.\release\GmodSimpleMMDCharacterImporter_portable\GmodSimpleMMDCharacterImporter.exe
 ```
 
 The first launch may take longer while the app prepares its local Blender setup
@@ -187,9 +187,9 @@ powershell -ExecutionPolicy Bypass -File .\tools\build_mmd_character_importer_ex
 Build output:
 
 ```text
-release\MMDCharacterImporter.exe
-release\MMDCharacterImporter_dependency_manifest.json
-release\MMDCharacterImporter_RUN_ME.txt
+release\GmodSimpleMMDCharacterImporter.exe
+release\GmodSimpleMMDCharacterImporter_dependency_manifest.json
+release\GmodSimpleMMDCharacterImporter_RUN_ME.txt
 ```
 
 The build also uses `build\` and `dist\` as PyInstaller intermediate folders.
@@ -206,10 +206,10 @@ powershell -ExecutionPolicy Bypass -File .\tools\build_mmd_character_importer_ex
 Build output:
 
 ```text
-release\MMDCharacterImporter_portable\MMDCharacterImporter.exe
-release\MMDCharacterImporter_portable\_internal
-release\MMDCharacterImporter_portable\dependency_manifest.json
-release\MMDCharacterImporter_portable\RUN_ME.txt
+release\GmodSimpleMMDCharacterImporter_portable\GmodSimpleMMDCharacterImporter.exe
+release\GmodSimpleMMDCharacterImporter_portable\_internal
+release\GmodSimpleMMDCharacterImporter_portable\dependency_manifest.json
+release\GmodSimpleMMDCharacterImporter_portable\RUN_ME.txt
 ```
 
 Do not move or delete the `_internal` folder from a portable build.

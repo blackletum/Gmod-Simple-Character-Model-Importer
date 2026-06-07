@@ -1,6 +1,6 @@
 param(
     [string]$Python = "python",
-    [string]$Name = "MMDCharacterImporter",
+    [string]$Name = "GmodSimpleMMDCharacterImporter",
     [switch]$UseUPX,
     [switch]$Console,
     [switch]$OneDir

@@ -230,6 +230,8 @@ def load_build_info() -> dict[str, object]:
         candidates.extend(
             [
                 exe_dir / "build_info.json",
+                exe_dir / "GmodSimpleMMDCharacterImporter_build_info.json",
+                exe_dir / "GmodSimpleMMDCharacterImporter_dependency_manifest.json",
                 exe_dir / "MMDCharacterImporter_build_info.json",
                 exe_dir / "MMDCharacterImporter_dependency_manifest.json",
                 exe_dir / "dependency_manifest.json",

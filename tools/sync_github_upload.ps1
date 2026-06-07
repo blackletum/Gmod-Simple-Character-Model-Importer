@@ -388,7 +388,7 @@ Build the default one-file executable:
 powershell -ExecutionPolicy Bypass -File .\tools\build_mmd_character_importer_exe.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-The output is written to `release\MMDCharacterImporter.exe`.
+The output is written to `release\GmodSimpleMMDCharacterImporter.exe`.
 
 Build a portable folder instead:
 
@@ -399,10 +399,10 @@ powershell -ExecutionPolicy Bypass -File .\tools\build_mmd_character_importer_ex
 Portable output:
 
 ```text
-release\MMDCharacterImporter_portable\MMDCharacterImporter.exe
-release\MMDCharacterImporter_portable\_internal
-release\MMDCharacterImporter_portable\dependency_manifest.json
-release\MMDCharacterImporter_portable\RUN_ME.txt
+release\GmodSimpleMMDCharacterImporter_portable\GmodSimpleMMDCharacterImporter.exe
+release\GmodSimpleMMDCharacterImporter_portable\_internal
+release\GmodSimpleMMDCharacterImporter_portable\dependency_manifest.json
+release\GmodSimpleMMDCharacterImporter_portable\RUN_ME.txt
 ```
 
 Useful build options:
@@ -423,13 +423,13 @@ powershell -ExecutionPolicy Bypass -File .\tools\build_mmd_character_importer_ex
 After building, launch:
 
 ```powershell
-.\release\MMDCharacterImporter.exe
+.\release\GmodSimpleMMDCharacterImporter.exe
 ```
 
 For a portable-folder build, keep `_internal` beside the executable and launch:
 
 ```powershell
-.\release\MMDCharacterImporter_portable\MMDCharacterImporter.exe
+.\release\GmodSimpleMMDCharacterImporter_portable\GmodSimpleMMDCharacterImporter.exe
 ```
 
 ## Repository Maintenance
