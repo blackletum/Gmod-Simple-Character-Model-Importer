@@ -230,6 +230,17 @@ def unique_name(base: str, used: set[str], fallback: str) -> str:
     return candidate
 
 
+def strip_generated_material_prefix(name: str) -> str:
+    return re.sub(r"^mci_mat_\d+_", "", blender_base_name(str(name or "").strip()), flags=re.IGNORECASE)
+
+
+def material_bodygroup_name(name: str) -> str:
+    cleaned = stripped_safe_name(strip_generated_material_prefix(name))
+    if not cleaned or not SAFE_NAME_RE.fullmatch(cleaned):
+        return ""
+    return capitalized_bodygroup_name(cleaned)
+
+
 def capitalized_bodygroup_name(name: str) -> str:
     safe = stripped_safe_name(name)
     if safe.lower() == "head":
@@ -643,6 +654,68 @@ def used_materials(obj: bpy.types.Object) -> list[bpy.types.Material]:
     return [materials[name] for name in sorted(materials, key=natural_key)]
 
 
+def material_vertex_counts(obj: bpy.types.Object) -> dict[str, int]:
+    material_vertices: dict[str, set[int]] = defaultdict(set)
+    for poly in obj.data.polygons:
+        mat = material_for_polygon(obj, poly)
+        if mat is None or not mat.name:
+            continue
+        material_vertices[str(mat.name)].update(int(index) for index in poly.vertices)
+    return {
+        name: len(vertices)
+        for name, vertices in sorted(material_vertices.items(), key=lambda item: natural_key(item[0]))
+    }
+
+
+def dominant_material_from_counts(counts: dict[str, int]) -> tuple[str, int]:
+    valid = [(str(name), int(count or 0)) for name, count in counts.items() if str(name) and int(count or 0) > 0]
+    if not valid:
+        return "", 0
+    valid.sort(key=lambda item: (-item[1], natural_key(item[0])))
+    return valid[0]
+
+
+def aggregate_material_vertex_counts(items: Iterable[dict[str, object]]) -> dict[str, int]:
+    counts: dict[str, int] = defaultdict(int)
+    for item in items:
+        raw_counts = item.get("material_vertex_counts", {}) if isinstance(item, dict) else {}
+        if not isinstance(raw_counts, dict):
+            continue
+        for name, count in raw_counts.items():
+            try:
+                counts[str(name)] += int(count)
+            except Exception:
+                pass
+    return {
+        name: count
+        for name, count in sorted(counts.items(), key=lambda item: natural_key(item[0]))
+        if name and count > 0
+    }
+
+
+def material_based_bodygroup_base(
+    sources: Iterable[dict[str, object]],
+    category: str,
+    fallback_name: str,
+) -> tuple[str, str, str, int]:
+    fallback = capitalized_bodygroup_name(default_bodygroup_name(category, fallback_name))
+    counts = aggregate_material_vertex_counts(sources)
+    dominant_name, dominant_count = dominant_material_from_counts(counts)
+    material_name = material_bodygroup_name(dominant_name)
+    if material_name:
+        return material_name, "material", dominant_name, dominant_count
+    return fallback, "category", dominant_name, dominant_count
+
+
+def generic_auto_bodygroup_name(name: str) -> bool:
+    safe = stripped_safe_name(name).lower()
+    if not safe:
+        return True
+    return bool(re.fullmatch(r"(body|face|clothes|hair|accessory)(_\d+)?", safe)) or safe.startswith(
+        ("accessory_", "hair_tie_", "headphone_")
+    )
+
+
 def material_for_polygon(obj: bpy.types.Object, poly: bpy.types.MeshPolygon) -> bpy.types.Material | None:
     materials = obj.data.materials
     if 0 <= int(poly.material_index) < len(materials):
@@ -786,6 +859,16 @@ def connected_mesh_components(obj: bpy.types.Object, include_vertices: bool = Fa
             },
             key=natural_key,
         )
+        component_material_vertices: dict[str, set[int]] = defaultdict(set)
+        for poly in faces:
+            mat = material_for_polygon(obj, poly)
+            if mat is not None and mat.name:
+                component_material_vertices[str(mat.name)].update(int(index) for index in poly.vertices)
+        component_material_counts = {
+            name: len(vertices)
+            for name, vertices in sorted(component_material_vertices.items(), key=lambda item: natural_key(item[0]))
+        }
+        dominant_component_material, dominant_component_material_count = dominant_material_from_counts(component_material_counts)
         tracking_counts: dict[str, int] = defaultdict(int)
         for vertex_index in vertex_indices:
             vertex = obj.data.vertices[vertex_index]
@@ -804,6 +887,9 @@ def connected_mesh_components(obj: bpy.types.Object, include_vertices: bool = Fa
             "centroid": v3(centroid),
             "extent": v3([maxs[axis] - mins[axis] for axis in range(3)]),
             "material_names": material_names,
+            "material_vertex_counts": component_material_counts,
+            "dominant_material_name": dominant_component_material,
+            "dominant_material_vertex_count": dominant_component_material_count,
             "tracking_vertex_groups": [
                 {"name": name, "vertex_count": count}
                 for name, count in sorted(tracking_counts.items(), key=lambda item: natural_key(item[0]))
@@ -872,6 +958,8 @@ def collect_sources(vertex_limit: int = DEFAULT_SOURCE_VERTEX_LIMIT) -> list[dic
         uid = source_uid(index, obj)
         object_materials = used_materials(obj)
         materials = [mat.name for mat in object_materials]
+        material_counts = material_vertex_counts(obj)
+        dominant_material_name, dominant_material_count = dominant_material_from_counts(material_counts)
         material_alphas = {mat.name: material_alpha(mat) for mat in object_materials}
         zero_alpha_materials = [name for name, alpha in material_alphas.items() if alpha <= 0.001]
         default_enabled = not zero_alpha_materials
@@ -928,6 +1016,9 @@ def collect_sources(vertex_limit: int = DEFAULT_SOURCE_VERTEX_LIMIT) -> list[dic
                 "uid": uid,
                 "object_names": [obj.name],
                 "material_names": materials,
+                "material_vertex_counts": material_counts,
+                "dominant_material_name": dominant_material_name,
+                "dominant_material_vertex_count": dominant_material_count,
                 "material_alphas": material_alphas,
                 "zero_alpha_materials": zero_alpha_materials,
                 "default_enabled": default_enabled,
@@ -1042,6 +1133,8 @@ def build_bodygroups(sources: list[dict[str, object]]) -> list[dict[str, object]
     if face_sources:
         face_name = unique_name("Face", used_names, "Face")
         material_alphas: dict[str, float] = {}
+        face_material_counts = aggregate_material_vertex_counts(face_sources)
+        face_dominant_material, face_dominant_material_count = dominant_material_from_counts(face_material_counts)
         warnings: set[str] = set()
         for source in face_sources:
             if isinstance(source.get("material_alphas"), dict):
@@ -1067,6 +1160,10 @@ def build_bodygroups(sources: list[dict[str, object]]) -> list[dict[str, object]
                     for source in face_sources
                     for material_name in source.get("material_names", [])
                 ),
+                "material_vertex_counts": face_material_counts,
+                "dominant_material_name": face_dominant_material,
+                "dominant_material_vertex_count": face_dominant_material_count,
+                "auto_name_source": "category",
                 "material_alphas": material_alphas,
                 "zero_alpha_materials": unique_sorted(
                     material_name
@@ -1120,7 +1217,7 @@ def build_bodygroups(sources: list[dict[str, object]]) -> list[dict[str, object]
         index = len(groups) + 1
         source_object_names = list(source.get("object_names", []))
         fallback_name = str(source_object_names[0]) if source_object_names else f"Bodygroup_{index:03d}"
-        base_name = default_bodygroup_name(category, fallback_name)
+        base_name, auto_name_source, dominant_material_name, dominant_material_count = material_based_bodygroup_base([source], category, fallback_name)
         name = unique_name(capitalized_bodygroup_name(base_name), used_names, f"Bodygroup_{index:03d}")
         enabled = bool(source.get("default_enabled", True))
         groups.append(
@@ -1131,6 +1228,10 @@ def build_bodygroups(sources: list[dict[str, object]]) -> list[dict[str, object]
                 "source_uids": [str(source.get("uid") or "")],
                 "source_objects": list(source.get("object_names", [])),
                 "material_names": list(source.get("material_names", [])),
+                "material_vertex_counts": dict(source.get("material_vertex_counts", {})) if isinstance(source.get("material_vertex_counts"), dict) else {},
+                "dominant_material_name": dominant_material_name,
+                "dominant_material_vertex_count": dominant_material_count,
+                "auto_name_source": auto_name_source,
                 "material_alphas": dict(source.get("material_alphas", {})) if isinstance(source.get("material_alphas"), dict) else {},
                 "zero_alpha_materials": list(source.get("zero_alpha_materials", [])) if isinstance(source.get("zero_alpha_materials"), list) else [],
                 "related_vertex_groups": [
@@ -1414,6 +1515,19 @@ def cluster_vertex_indices(components: list[dict[str, object]]) -> list[int]:
     return sorted(values)
 
 
+def cluster_material_vertex_counts(components: list[dict[str, object]]) -> dict[str, int]:
+    return aggregate_material_vertex_counts(components)
+
+
+def material_named_split_base(default_name: str, components: list[dict[str, object]]) -> tuple[str, str, str, int]:
+    counts = cluster_material_vertex_counts(components)
+    dominant_name, dominant_count = dominant_material_from_counts(counts)
+    material_name = material_bodygroup_name(dominant_name)
+    if material_name and generic_auto_bodygroup_name(default_name):
+        return material_name, "material", dominant_name, dominant_count
+    return default_name, "category", dominant_name, dominant_count
+
+
 def stripped_source_components(sources: list[dict[str, object]]) -> list[dict[str, object]]:
     public_sources: list[dict[str, object]] = []
     for source in sources:
@@ -1512,6 +1626,8 @@ def detect_heuristic_split_candidates(sources: list[dict[str, object]], bodygrou
                 confidence += 0.03
             confidence = round(min(0.96, confidence), 3)
             base_name = capitalized_bodygroup_name(split_candidate_name(source, centroid, extent, metrics))
+            material_counts = cluster_material_vertex_counts(cluster)
+            base_name, auto_name_source, dominant_material_name, dominant_material_count = material_named_split_base(base_name, cluster)
             if category == "head" or base_name.lower().startswith("accessory_"):
                 confidence = min(confidence, 0.74)
             source_uid_value = str(source.get("uid") or "")
@@ -1540,6 +1656,10 @@ def detect_heuristic_split_candidates(sources: list[dict[str, object]], bodygrou
                     "centroid": v3(centroid),
                     "extent": v3(extent),
                     "material_names": sorted({name for component in cluster for name in component.get("material_names", [])}, key=natural_key),
+                    "material_vertex_counts": material_counts,
+                    "dominant_material_name": dominant_material_name,
+                    "dominant_material_vertex_count": dominant_material_count,
+                    "auto_name_source": auto_name_source,
                     "related_vertex_groups": cluster_tracking_groups(cluster),
                     "warnings": [] if confidence >= AUTO_SPLIT_HIGH_CONFIDENCE else ["Medium-confidence split candidate; review before enabling."],
                 }
@@ -1828,6 +1948,8 @@ def detect_advanced_split_candidates(
                 continue
             confidence = advanced_candidate_confidence(source, cluster, centroid, extent, metrics, landmarks)
             base_name = capitalized_bodygroup_name(advanced_split_candidate_name(source, centroid, extent, metrics, landmarks))
+            material_counts = cluster_material_vertex_counts(cluster)
+            base_name, auto_name_source, dominant_material_name, dominant_material_count = material_named_split_base(base_name, cluster)
             source_uid_value = str(source.get("uid") or "")
             parent_group = source_to_group.get(source_uid_value, {})
             warnings: list[str] = []
@@ -1858,6 +1980,10 @@ def detect_advanced_split_candidates(
                     "centroid": v3(centroid),
                     "extent": v3(extent),
                     "material_names": sorted({name for component in cluster for name in component.get("material_names", [])}, key=natural_key),
+                    "material_vertex_counts": material_counts,
+                    "dominant_material_name": dominant_material_name,
+                    "dominant_material_vertex_count": dominant_material_count,
+                    "auto_name_source": auto_name_source,
                     "related_vertex_groups": cluster_tracking_groups(cluster),
                     "warnings": warnings,
                 }
@@ -1945,6 +2071,10 @@ def append_split_candidates_to_plan(bodygroups: list[dict[str, object]], candida
                 "preview_source_uids": [new_uid],
                 "source_objects": list(candidate.get("source_objects", [])),
                 "material_names": list(candidate.get("material_names", [])),
+                "material_vertex_counts": dict(candidate.get("material_vertex_counts", {})) if isinstance(candidate.get("material_vertex_counts"), dict) else {},
+                "dominant_material_name": candidate.get("dominant_material_name", ""),
+                "dominant_material_vertex_count": int(candidate.get("dominant_material_vertex_count", 0) or 0),
+                "auto_name_source": candidate.get("auto_name_source", "category"),
                 "related_vertex_groups": list(candidate.get("related_vertex_groups", [])),
                 "category": "accessory_split",
                 "confidence": confidence,
@@ -2485,6 +2615,10 @@ def apply_plan(
                     "vertex_count": len(part.data.vertices),
                     "face_count": len(part.data.polygons),
                     "materials": [mat.name for mat in part.data.materials if mat is not None],
+                    "material_vertex_counts": dict(group.get("material_vertex_counts", {})) if isinstance(group.get("material_vertex_counts"), dict) else {},
+                    "dominant_material_name": group.get("dominant_material_name", ""),
+                    "dominant_material_vertex_count": int(group.get("dominant_material_vertex_count", 0) or 0),
+                    "auto_name_source": group.get("auto_name_source", ""),
                     "vertex_group_count": len(part.vertex_groups),
                     "armature_modifiers": [
                         modifier.name
