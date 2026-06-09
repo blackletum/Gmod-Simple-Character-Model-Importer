@@ -2383,6 +2383,20 @@ def analyze_scene(
         "splits": plan_splits,
         "warnings": [],
     }
+    name_repairs = repair_plan_bodygroup_names(plan)
+    if name_repairs:
+        repair_by_uid = {str(item.get("uid") or ""): str(item.get("new_name") or "") for item in name_repairs}
+        for candidate in split_candidates:
+            if isinstance(candidate, dict):
+                uid = str(candidate.get("uid") or "")
+                if uid in repair_by_uid and repair_by_uid[uid]:
+                    candidate["proposed_name"] = repair_by_uid[uid]
+        warning = f"Adjusted {len(name_repairs)} duplicate or unsafe bodygroup name(s)."
+        warnings.append(warning)
+        plan["warnings"] = [warning]
+        plan["name_repairs"] = name_repairs
+        analysis["warnings"] = warnings
+        analysis["name_repairs"] = name_repairs
     return analysis, plan
 
 
@@ -2635,6 +2649,70 @@ def validate_plan(plan: dict[str, object]) -> list[str]:
     return errors
 
 
+def repair_plan_bodygroup_names(plan: dict[str, object]) -> list[dict[str, object]]:
+    """Make enabled bodygroup names safe and unique before validation/apply.
+
+    Auto split candidates may be generated after the initial auto bodygroup
+    names are made unique.  This final pass also protects manually edited or
+    stale plans loaded from disk.
+    """
+    repairs: list[dict[str, object]] = []
+    used: set[str] = set()
+    uid_to_name: dict[str, str] = {}
+    groups = plan.get("bodygroups", [])
+    if not isinstance(groups, list):
+        return repairs
+    for index, group in enumerate(groups, start=1):
+        if not isinstance(group, dict) or not group.get("enabled", True):
+            continue
+        original = str(group.get("proposed_name") or group.get("uid") or "").strip()
+        fallback = f"Bodygroup_{index:03d}"
+        candidate = stripped_safe_name(original) or fallback
+        if not SAFE_NAME_RE.fullmatch(candidate):
+            candidate = fallback
+        root = candidate
+        suffix_index = 2
+        while candidate in used:
+            candidate = f"{root}_{suffix_index:02d}"
+            suffix_index += 1
+        used.add(candidate)
+        uid = str(group.get("uid") or "")
+        if uid:
+            uid_to_name[uid] = candidate
+        if candidate != original:
+            group["proposed_name"] = candidate
+            warnings = list(group.get("warnings", [])) if isinstance(group.get("warnings"), list) else []
+            warning = f"Bodygroup name was changed from {original!r} to {candidate!r} to avoid duplicate or unsafe names."
+            if warning not in warnings:
+                warnings.append(warning)
+            group["warnings"] = warnings
+            repairs.append(
+                {
+                    "uid": uid,
+                    "old_name": original,
+                    "new_name": candidate,
+                    "reason": "duplicate_or_unsafe",
+                }
+            )
+    if uid_to_name:
+        for key in ("splits", "split_regions", "split_candidates"):
+            entries = plan.get(key, [])
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                uid = str(entry.get("new_uid") or entry.get("uid") or "")
+                if uid in uid_to_name:
+                    entry["proposed_name"] = uid_to_name[uid]
+    if repairs:
+        existing = plan.get("name_repairs", [])
+        if not isinstance(existing, list):
+            existing = []
+        plan["name_repairs"] = existing + repairs
+    return repairs
+
+
 def join_objects(objects: list[bpy.types.Object], name: str) -> bpy.types.Object | None:
     objects = [obj for obj in objects if obj.name in bpy.data.objects and obj.type == "MESH"]
     if not objects:
@@ -2743,6 +2821,8 @@ def apply_plan(
 ) -> None:
     started = time.monotonic()
     vertex_limit = max(1, int(vertex_limit or plan.get("vertex_limit") or DEFAULT_SOURCE_VERTEX_LIMIT))
+    repair_plan_bodygroup_names(plan)
+    name_repairs = list(plan.get("name_repairs", [])) if isinstance(plan.get("name_repairs"), list) else []
     errors = validate_plan(plan)
     if errors:
         raise RuntimeError("Bodygroup plan validation failed:\n" + "\n".join(errors))
@@ -2871,6 +2951,7 @@ def apply_plan(
         "scale": analysis.get("scale", {}),
         "separation": analysis.get("separation", {}),
         "shapekey_prune": analysis.get("shapekey_prune", {}),
+        "name_repairs": name_repairs,
         "auto_split": analysis.get("auto_split", {}),
         "facial_merge": plan.get("facial_merge", analysis.get("facial_merge", {})),
         "vertex_limit": vertex_limit,
