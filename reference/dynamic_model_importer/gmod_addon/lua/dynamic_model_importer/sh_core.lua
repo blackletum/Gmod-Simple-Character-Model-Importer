@@ -105,8 +105,15 @@ DynamicModelImporter.Translations = {
         ["Left-click an NPC, ragdoll, or player to select its model."] = "左键点击 NPC、布娃娃或玩家以选择其模型。",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles the selected material."] = "右键点击 NPC、布娃娃或玩家以选择其模型。左键切换所选材质的隐藏状态。",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles all jigglebones."] = "右键点击 NPC、布娃娃或玩家以选择其模型。左键切换所有摇摆骨骼。",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles the selected material."] = "右键点击 NPC、布娃娃、玩家、物品、武器或视图模型以选择其模型。左键切换所选材质的隐藏状态。",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles all jigglebones."] = "右键点击 NPC、布娃娃、玩家、物品、武器或视图模型以选择其模型。左键切换所有摇摆骨骼。",
         ["Target has no valid model path."] = "目标没有有效的模型路径。",
         ["Selected model: %s"] = "已选择模型：%s",
+        ["Selected model: %s (%s)"] = "已选择模型：%s（%s）",
+        ["Importer model scope"] = "导入模型范围",
+        ["Exact model path scope"] = "精确模型路径范围",
+        ["Importer model scope: saved repairs use the importer model path and continue to work for spawned NPCs, ragdolls, and matching player models."] = "导入模型范围：保存的修复会使用导入器模型路径，并继续适用于生成的 NPC、布娃娃和匹配的玩家模型。",
+        ["Exact model path scope: saved repairs affect only entities using this exact .mdl path, including matching viewmodels or weapons."] = "精确模型路径范围：保存的修复只影响使用此精确 .mdl 路径的实体，包括匹配的视图模型或武器。",
         ["Selected material index"] = "所选材质索引",
         ["Hide current material"] = "隐藏当前材质",
         ["Restore current material"] = "还原当前材质",
@@ -118,6 +125,8 @@ DynamicModelImporter.Translations = {
         ["Selected model path"] = "所选模型路径",
         ["Select a model by left-clicking an NPC, ragdoll, or player."] = "左键点击 NPC、布娃娃或玩家来选择模型。",
         ["Select a model by right-clicking an NPC, ragdoll, or player."] = "右键点击 NPC、布娃娃或玩家来选择模型。",
+        ["Select a model by right-clicking an NPC, ragdoll, player, prop, weapon, or viewmodel."] = "右键点击 NPC、布娃娃、玩家、物品、武器或视图模型来选择模型。",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel. SheepyLord/imported models use importer scope; other targets use exact .mdl path scope."] = "右键点击 NPC、布娃娃、玩家、物品、武器或视图模型。SheepyLord/导入模型使用导入模型范围；其他目标使用精确 .mdl 路径范围。",
         ["Jigglebone tool for Imported model"] = "导入模型摇摆骨骼工具",
         ["Disable jigglebones for any model path."] = "禁用任意模型路径的摇摆骨骼。",
         ["Select an NPC, ragdoll, or player. Saved jigglebone settings apply to every entity using the same model path."] = "选择 NPC、布娃娃或玩家。保存的摇摆骨骼设置会应用到所有使用相同模型路径的实体。",
@@ -227,8 +236,15 @@ DynamicModelImporter.Translations = {
         ["Left-click an NPC, ragdoll, or player to select its model."] = "Clic gauche sur un PNJ, un ragdoll ou un joueur pour sélectionner son modèle.",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles the selected material."] = "Clic droit sur un PNJ, un ragdoll ou un joueur pour sélectionner son modèle. Clic gauche bascule le matériau sélectionné.",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles all jigglebones."] = "Clic droit sur un PNJ, un ragdoll ou un joueur pour sélectionner son modèle. Clic gauche bascule tous les jigglebones.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles the selected material."] = "Clic droit sur un PNJ, un ragdoll, un joueur, un prop, une arme ou un viewmodel pour sélectionner son modèle. Clic gauche bascule le matériau sélectionné.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles all jigglebones."] = "Clic droit sur un PNJ, un ragdoll, un joueur, un prop, une arme ou un viewmodel pour sélectionner son modèle. Clic gauche bascule tous les jigglebones.",
         ["Target has no valid model path."] = "La cible n'a pas de chemin de modèle valide.",
         ["Selected model: %s"] = "Modèle sélectionné : %s",
+        ["Selected model: %s (%s)"] = "Modèle sélectionné : %s (%s)",
+        ["Importer model scope"] = "Portée du modèle importé",
+        ["Exact model path scope"] = "Portée du chemin exact du modèle",
+        ["Importer model scope: saved repairs use the importer model path and continue to work for spawned NPCs, ragdolls, and matching player models."] = "Portée du modèle importé : les corrections enregistrées utilisent le chemin du modèle importé et continuent de fonctionner pour les PNJ, ragdolls et modèles joueur correspondants.",
+        ["Exact model path scope: saved repairs affect only entities using this exact .mdl path, including matching viewmodels or weapons."] = "Portée du chemin exact : les corrections enregistrées n'affectent que les entités utilisant exactement ce chemin .mdl, y compris les viewmodels ou armes correspondants.",
         ["Selected material index"] = "Indice du matériau sélectionné",
         ["Hide current material"] = "Masquer le matériau actuel",
         ["Restore current material"] = "Restaurer le matériau actuel",
@@ -240,6 +256,8 @@ DynamicModelImporter.Translations = {
         ["Selected model path"] = "Chemin du modèle sélectionné",
         ["Select a model by left-clicking an NPC, ragdoll, or player."] = "Sélectionnez un modèle par clic gauche sur un PNJ, un ragdoll ou un joueur.",
         ["Select a model by right-clicking an NPC, ragdoll, or player."] = "Sélectionnez un modèle par clic droit sur un PNJ, un ragdoll ou un joueur.",
+        ["Select a model by right-clicking an NPC, ragdoll, player, prop, weapon, or viewmodel."] = "Sélectionnez un modèle par clic droit sur un PNJ, un ragdoll, un joueur, un prop, une arme ou un viewmodel.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel. SheepyLord/imported models use importer scope; other targets use exact .mdl path scope."] = "Clic droit sur un PNJ, un ragdoll, un joueur, un prop, une arme ou un viewmodel. Les modèles SheepyLord/importés utilisent la portée importateur ; les autres cibles utilisent le chemin .mdl exact.",
         ["Jigglebone tool for Imported model"] = "Outil jigglebone pour modèle importé",
         ["Disable jigglebones for any model path."] = "Désactive les jigglebones pour n'importe quel chemin de modèle.",
         ["Select an NPC, ragdoll, or player. Saved jigglebone settings apply to every entity using the same model path."] = "Sélectionnez un PNJ, un ragdoll ou un joueur. Les réglages jigglebone enregistrés s'appliquent à toutes les entités utilisant le même chemin de modèle.",
@@ -349,8 +367,15 @@ DynamicModelImporter.Translations = {
         ["Left-click an NPC, ragdoll, or player to select its model."] = "Haz clic izquierdo en un NPC, ragdoll o jugador para seleccionar su modelo.",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles the selected material."] = "Haz clic derecho en un NPC, ragdoll o jugador para seleccionar su modelo. El clic izquierdo alterna el material seleccionado.",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles all jigglebones."] = "Haz clic derecho en un NPC, ragdoll o jugador para seleccionar su modelo. El clic izquierdo alterna todos los jigglebones.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles the selected material."] = "Haz clic derecho en un NPC, ragdoll, jugador, prop, arma o viewmodel para seleccionar su modelo. El clic izquierdo alterna el material seleccionado.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles all jigglebones."] = "Haz clic derecho en un NPC, ragdoll, jugador, prop, arma o viewmodel para seleccionar su modelo. El clic izquierdo alterna todos los jigglebones.",
         ["Target has no valid model path."] = "El objetivo no tiene una ruta de modelo válida.",
         ["Selected model: %s"] = "Modelo seleccionado: %s",
+        ["Selected model: %s (%s)"] = "Modelo seleccionado: %s (%s)",
+        ["Importer model scope"] = "Ámbito de modelo importado",
+        ["Exact model path scope"] = "Ámbito de ruta exacta del modelo",
+        ["Importer model scope: saved repairs use the importer model path and continue to work for spawned NPCs, ragdolls, and matching player models."] = "Ámbito de modelo importado: las reparaciones guardadas usan la ruta del modelo importado y siguen funcionando para NPCs, ragdolls y modelos de jugador coincidentes.",
+        ["Exact model path scope: saved repairs affect only entities using this exact .mdl path, including matching viewmodels or weapons."] = "Ámbito de ruta exacta: las reparaciones guardadas solo afectan a entidades que usan exactamente esta ruta .mdl, incluidos viewmodels o armas coincidentes.",
         ["Selected material index"] = "Índice de material seleccionado",
         ["Hide current material"] = "Ocultar material actual",
         ["Restore current material"] = "Restaurar material actual",
@@ -362,6 +387,8 @@ DynamicModelImporter.Translations = {
         ["Selected model path"] = "Ruta del modelo seleccionado",
         ["Select a model by left-clicking an NPC, ragdoll, or player."] = "Selecciona un modelo con clic izquierdo en un NPC, ragdoll o jugador.",
         ["Select a model by right-clicking an NPC, ragdoll, or player."] = "Selecciona un modelo con clic derecho en un NPC, ragdoll o jugador.",
+        ["Select a model by right-clicking an NPC, ragdoll, player, prop, weapon, or viewmodel."] = "Selecciona un modelo con clic derecho en un NPC, ragdoll, jugador, prop, arma o viewmodel.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel. SheepyLord/imported models use importer scope; other targets use exact .mdl path scope."] = "Haz clic derecho en un NPC, ragdoll, jugador, prop, arma o viewmodel. Los modelos SheepyLord/importados usan ámbito de importador; los demás objetivos usan la ruta .mdl exacta.",
         ["Jigglebone tool for Imported model"] = "Herramienta jigglebone para modelo importado",
         ["Disable jigglebones for any model path."] = "Desactiva jigglebones para cualquier ruta de modelo.",
         ["Select an NPC, ragdoll, or player. Saved jigglebone settings apply to every entity using the same model path."] = "Selecciona un NPC, ragdoll o jugador. Los ajustes de jigglebone guardados se aplican a todas las entidades que usan la misma ruta de modelo.",
@@ -471,8 +498,15 @@ DynamicModelImporter.Translations = {
         ["Left-click an NPC, ragdoll, or player to select its model."] = "NPC, 래그돌 또는 플레이어를 왼쪽 클릭해 모델을 선택하세요.",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles the selected material."] = "NPC, 래그돌 또는 플레이어를 오른쪽 클릭해 모델을 선택하세요. 왼쪽 클릭은 선택한 재질을 전환합니다.",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles all jigglebones."] = "NPC, 래그돌 또는 플레이어를 오른쪽 클릭해 모델을 선택하세요. 왼쪽 클릭은 모든 지글본을 전환합니다.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles the selected material."] = "NPC, 래그돌, 플레이어, 프롭, 무기 또는 뷰모델을 오른쪽 클릭해 모델을 선택하세요. 왼쪽 클릭은 선택한 재질을 전환합니다.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles all jigglebones."] = "NPC, 래그돌, 플레이어, 프롭, 무기 또는 뷰모델을 오른쪽 클릭해 모델을 선택하세요. 왼쪽 클릭은 모든 지글본을 전환합니다.",
         ["Target has no valid model path."] = "대상에 유효한 모델 경로가 없습니다.",
         ["Selected model: %s"] = "선택한 모델: %s",
+        ["Selected model: %s (%s)"] = "선택한 모델: %s (%s)",
+        ["Importer model scope"] = "가져온 모델 범위",
+        ["Exact model path scope"] = "정확한 모델 경로 범위",
+        ["Importer model scope: saved repairs use the importer model path and continue to work for spawned NPCs, ragdolls, and matching player models."] = "가져온 모델 범위: 저장된 복구 설정은 가져온 모델 경로를 사용하며 생성된 NPC, 래그돌 및 일치하는 플레이어 모델에 계속 적용됩니다.",
+        ["Exact model path scope: saved repairs affect only entities using this exact .mdl path, including matching viewmodels or weapons."] = "정확한 모델 경로 범위: 저장된 복구 설정은 일치하는 뷰모델이나 무기를 포함해 이 정확한 .mdl 경로를 사용하는 엔티티에만 적용됩니다.",
         ["Selected material index"] = "선택한 재질 인덱스",
         ["Hide current material"] = "현재 재질 숨기기",
         ["Restore current material"] = "현재 재질 복원",
@@ -484,6 +518,8 @@ DynamicModelImporter.Translations = {
         ["Selected model path"] = "선택한 모델 경로",
         ["Select a model by left-clicking an NPC, ragdoll, or player."] = "NPC, 래그돌 또는 플레이어를 왼쪽 클릭해 모델을 선택하세요.",
         ["Select a model by right-clicking an NPC, ragdoll, or player."] = "NPC, 래그돌 또는 플레이어를 오른쪽 클릭해 모델을 선택하세요.",
+        ["Select a model by right-clicking an NPC, ragdoll, player, prop, weapon, or viewmodel."] = "NPC, 래그돌, 플레이어, 프롭, 무기 또는 뷰모델을 오른쪽 클릭해 모델을 선택하세요.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel. SheepyLord/imported models use importer scope; other targets use exact .mdl path scope."] = "NPC, 래그돌, 플레이어, 프롭, 무기 또는 뷰모델을 오른쪽 클릭하세요. SheepyLord/가져온 모델은 가져온 모델 범위를 사용하고 다른 대상은 정확한 .mdl 경로 범위를 사용합니다.",
         ["Jigglebone tool for Imported model"] = "가져온 모델 지글본 도구",
         ["Disable jigglebones for any model path."] = "모든 모델 경로의 지글본을 비활성화합니다.",
         ["Select an NPC, ragdoll, or player. Saved jigglebone settings apply to every entity using the same model path."] = "NPC, 래그돌 또는 플레이어를 선택하세요. 저장된 지글본 설정은 같은 모델 경로를 사용하는 모든 엔티티에 적용됩니다.",
@@ -593,8 +629,15 @@ DynamicModelImporter.Translations = {
         ["Left-click an NPC, ragdoll, or player to select its model."] = "Нажмите ЛКМ по NPC, рэгдоллу или игроку, чтобы выбрать его модель.",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles the selected material."] = "Нажмите ПКМ по NPC, рэгдоллу или игроку, чтобы выбрать его модель. ЛКМ переключает выбранный материал.",
         ["Right-click an NPC, ragdoll, or player to select its model. Left-click toggles all jigglebones."] = "Нажмите ПКМ по NPC, рэгдоллу или игроку, чтобы выбрать его модель. ЛКМ переключает все jigglebone.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles the selected material."] = "Нажмите ПКМ по NPC, рэгдоллу, игроку, prop, оружию или viewmodel, чтобы выбрать его модель. ЛКМ переключает выбранный материал.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles all jigglebones."] = "Нажмите ПКМ по NPC, рэгдоллу, игроку, prop, оружию или viewmodel, чтобы выбрать его модель. ЛКМ переключает все jigglebone.",
         ["Target has no valid model path."] = "У цели нет допустимого пути модели.",
         ["Selected model: %s"] = "Выбрана модель: %s",
+        ["Selected model: %s (%s)"] = "Выбрана модель: %s (%s)",
+        ["Importer model scope"] = "Область импортированной модели",
+        ["Exact model path scope"] = "Область точного пути модели",
+        ["Importer model scope: saved repairs use the importer model path and continue to work for spawned NPCs, ragdolls, and matching player models."] = "Область импортированной модели: сохраненные исправления используют путь модели импортера и продолжают работать для созданных NPC, рэгдоллов и совпадающих моделей игрока.",
+        ["Exact model path scope: saved repairs affect only entities using this exact .mdl path, including matching viewmodels or weapons."] = "Область точного пути: сохраненные исправления влияют только на сущности с этим точным путем .mdl, включая совпадающие viewmodel или оружие.",
         ["Selected material index"] = "Индекс выбранного материала",
         ["Hide current material"] = "Скрыть текущий материал",
         ["Restore current material"] = "Восстановить текущий материал",
@@ -606,6 +649,8 @@ DynamicModelImporter.Translations = {
         ["Selected model path"] = "Выбранный путь модели",
         ["Select a model by left-clicking an NPC, ragdoll, or player."] = "Выберите модель, нажав ЛКМ по NPC, рэгдоллу или игроку.",
         ["Select a model by right-clicking an NPC, ragdoll, or player."] = "Выберите модель, нажав ПКМ по NPC, рэгдоллу или игроку.",
+        ["Select a model by right-clicking an NPC, ragdoll, player, prop, weapon, or viewmodel."] = "Выберите модель, нажав ПКМ по NPC, рэгдоллу, игроку, prop, оружию или viewmodel.",
+        ["Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel. SheepyLord/imported models use importer scope; other targets use exact .mdl path scope."] = "Нажмите ПКМ по NPC, рэгдоллу, игроку, prop, оружию или viewmodel. Модели SheepyLord/импортированные используют область импортера; остальные цели используют точный путь .mdl.",
         ["Jigglebone tool for Imported model"] = "Инструмент jigglebone для импортированной модели",
         ["Disable jigglebones for any model path."] = "Отключает jigglebone для любого пути модели.",
         ["Select an NPC, ragdoll, or player. Saved jigglebone settings apply to every entity using the same model path."] = "Выберите NPC, рэгдолл или игрока. Сохраненные настройки jigglebone применяются ко всем сущностям с тем же путем модели.",
@@ -663,6 +708,26 @@ function DynamicModelImporter.LF(raw, ...)
     local ok, formatted = pcall(string.format, DynamicModelImporter.L(raw), ...)
     if ok then return formatted end
     return DynamicModelImporter.L(raw)
+end
+
+function DynamicModelImporter.RepairScopeLabel(modelPath)
+    local scope = DynamicModelImporter.RepairScopeForModelPath(modelPath)
+    if scope == "importer" then
+        return DynamicModelImporter.L("Importer model scope")
+    elseif scope == "exact" then
+        return DynamicModelImporter.L("Exact model path scope")
+    end
+    return DynamicModelImporter.L("Invalid model path.")
+end
+
+function DynamicModelImporter.RepairScopeStatus(modelPath)
+    local scope = DynamicModelImporter.RepairScopeForModelPath(modelPath)
+    if scope == "importer" then
+        return DynamicModelImporter.L("Importer model scope: saved repairs use the importer model path and continue to work for spawned NPCs, ragdolls, and matching player models.")
+    elseif scope == "exact" then
+        return DynamicModelImporter.L("Exact model path scope: saved repairs affect only entities using this exact .mdl path, including matching viewmodels or weapons.")
+    end
+    return DynamicModelImporter.L("Invalid model path.")
 end
 
 if CLIENT then
@@ -961,6 +1026,21 @@ function DynamicModelImporter.NormalizeOverrideModelPath(raw)
     local modelPath = DynamicModelImporter.NormalizeModelPath(raw or "")
     if not modelPath then return nil end
     return string.lower(modelPath)
+end
+
+function DynamicModelImporter.IsImporterModelPath(modelPath)
+    local safePath = DynamicModelImporter.NormalizeOverrideModelPath(modelPath or "")
+    if not safePath then return false end
+    return starts_with(safePath, "models/sheepylord/")
+end
+
+function DynamicModelImporter.RepairScopeForModelPath(modelPath)
+    local safePath = DynamicModelImporter.NormalizeOverrideModelPath(modelPath or "")
+    if not safePath then return nil end
+    if DynamicModelImporter.IsImporterModelPath(safePath) then
+        return "importer"
+    end
+    return "exact"
 end
 
 function DynamicModelImporter.EntityModelPath(ent)

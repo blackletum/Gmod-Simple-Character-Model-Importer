@@ -135,7 +135,7 @@ if CLIENT then
     language.Add("dynamic_model_importer.category", L("Model Importer"))
     language.Add("tool.dynamic_model_importer_jigglebone.name", L("Jigglebone tool for Imported model"))
     language.Add("tool.dynamic_model_importer_jigglebone.desc", L("Disable jigglebones for any model path."))
-    language.Add("tool.dynamic_model_importer_jigglebone.0", L("Right-click an NPC, ragdoll, or player to select its model. Left-click toggles all jigglebones."))
+    language.Add("tool.dynamic_model_importer_jigglebone.0", L("Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles all jigglebones."))
 end
 
 if CLIENT then
@@ -406,7 +406,11 @@ if CLIENT then
         RunConsoleCommand("dynamic_model_importer_jigglebone_model_path", modelPath)
         request_override(modelPath)
         hook.Run("DynamicModelImporterJiggleboneTargetSelected", modelPath)
-        notification.AddLegacy(DynamicModelImporter.LF("Selected model: %s", modelPath), NOTIFY_GENERIC, 2)
+        notification.AddLegacy(
+            DynamicModelImporter.LF("Selected model: %s (%s)", modelPath, DynamicModelImporter.RepairScopeLabel(modelPath)),
+            NOTIFY_GENERIC,
+            2
+        )
         return true
     end
 
@@ -484,10 +488,10 @@ if CLIENT then
     function TOOL.BuildCPanel(panel)
         local UI = DynamicModelImporter.UI
         panel:AddControl("Header", {
-            Description = L("Right-click an NPC, ragdoll, or player to select its model. Left-click toggles all jigglebones.")
+            Description = L("Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles all jigglebones.")
         })
 
-        UI.AddSection(panel, "1. Select Target", "Right-click an NPC, ragdoll, or player. Saved jigglebone overrides apply to every entity using that model path.", UI.Colors.Green)
+        UI.AddSection(panel, "1. Select Target", "Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel. SheepyLord/imported models use importer scope; other targets use exact .mdl path scope.", UI.Colors.Green)
 
         local state = {
             model_path = DynamicModelImporter.NormalizeOverrideModelPath(read_convar_string("dynamic_model_importer_jigglebone_model_path", "")),
@@ -606,6 +610,14 @@ if CLIENT then
 
         local function set_status(text)
             if IsValid(status) then status:SetText(L(text or "")) end
+        end
+
+        local function set_scope_status()
+            if state.model_path then
+                set_status(DynamicModelImporter.RepairScopeStatus(state.model_path))
+            else
+                set_status("Select a model by right-clicking an NPC, ragdoll, player, prop, weapon, or viewmodel.")
+            end
         end
 
         local function cleanup_preview()
@@ -781,14 +793,14 @@ if CLIENT then
 
         clearFilterButton.DoClick = function()
             set_filter("", "", true)
-            set_status("Loaded repair settings.")
+            set_scope_status()
         end
 
         local function inspect_model()
             state.bones = {}
             inspectAttempt = inspectAttempt + 1
             if not state.model_path then
-                set_status("Select a model by right-clicking an NPC, ragdoll, or player.")
+                set_scope_status()
                 populate_bones()
                 return
             end
@@ -798,7 +810,7 @@ if CLIENT then
                 state.bones = collect_bone_infos(liveTarget)
                 if #state.bones > 0 then
                     populate_bones()
-                    set_status("Loaded repair settings.")
+                    set_scope_status()
                     return
                 end
             end
@@ -833,7 +845,7 @@ if CLIENT then
             end
             populate_bones()
             if #state.bones > 0 then
-                set_status("Loaded repair settings.")
+                set_scope_status()
             else
                 set_status(string.format(L("Could not inspect model: %s"), state.model_path))
             end
@@ -853,13 +865,14 @@ if CLIENT then
 
         local function save_current()
             if not state.model_path then
-                set_status("Select a model by right-clicking an NPC, ragdoll, or player.")
+                set_scope_status()
                 return
             end
             state.override = DynamicModelImporter.SanitizeModelOverride(state.override)
             ensure_essential_bone_overrides()
             save_override(state.model_path, state.override)
             populate_bones()
+            set_scope_status()
         end
 
         local function disable_bone_names(names)
@@ -977,7 +990,7 @@ if CLIENT then
             if DynamicModelImporter.NormalizeOverrideModelPath(modelPath) ~= state.model_path then return end
             state.override = copy_model_override(override)
             populate_bones()
-            set_status("Loaded repair settings.")
+            set_scope_status()
         end)
 
         panel.OnRemove = function()
@@ -991,7 +1004,7 @@ if CLIENT then
             if IsValid(panel) and state.model_path then
                 load_model_path(state.model_path)
             else
-                set_status("Select a model by right-clicking an NPC, ragdoll, or player.")
+                set_scope_status()
             end
         end)
     end

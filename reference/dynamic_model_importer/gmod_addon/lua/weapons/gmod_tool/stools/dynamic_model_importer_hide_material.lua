@@ -59,7 +59,7 @@ if CLIENT then
     language.Add("dynamic_model_importer.category", L("Model Importer"))
     language.Add("tool.dynamic_model_importer_hide_material.name", L("Hide Material Tool for Imported model"))
     language.Add("tool.dynamic_model_importer_hide_material.desc", L("Hide materials for any model path using the Dynamic Model Importer invisible material."))
-    language.Add("tool.dynamic_model_importer_hide_material.0", L("Right-click an NPC, ragdoll, or player to select its model. Left-click toggles the selected material."))
+    language.Add("tool.dynamic_model_importer_hide_material.0", L("Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles the selected material."))
 end
 
 if CLIENT then
@@ -89,7 +89,11 @@ if CLIENT then
         RunConsoleCommand("dynamic_model_importer_hide_material_model_path", modelPath)
         request_override(modelPath)
         hook.Run("DynamicModelImporterHideMaterialTargetSelected", modelPath)
-        notification.AddLegacy(DynamicModelImporter.LF("Selected model: %s", modelPath), NOTIFY_GENERIC, 2)
+        notification.AddLegacy(
+            DynamicModelImporter.LF("Selected model: %s (%s)", modelPath, DynamicModelImporter.RepairScopeLabel(modelPath)),
+            NOTIFY_GENERIC,
+            2
+        )
         return true
     end
 
@@ -348,10 +352,10 @@ if CLIENT then
     function TOOL.BuildCPanel(panel)
         local UI = DynamicModelImporter.UI
         panel:AddControl("Header", {
-            Description = L("Right-click an NPC, ragdoll, or player to select its model. Left-click toggles the selected material.")
+            Description = L("Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel to select its model. Left-click toggles the selected material.")
         })
 
-        UI.AddSection(panel, "1. Select Target", "Right-click an NPC, ragdoll, or player. Saved material overrides apply to every entity using that model path.", UI.Colors.Green)
+        UI.AddSection(panel, "1. Select Target", "Right-click an NPC, ragdoll, player, prop, weapon, or viewmodel. SheepyLord/imported models use importer scope; other targets use exact .mdl path scope.", UI.Colors.Green)
 
         local state = {
             model_path = DynamicModelImporter.NormalizeOverrideModelPath(read_convar_string("dynamic_model_importer_hide_material_model_path", "")),
@@ -387,6 +391,14 @@ if CLIENT then
 
         local function set_status(text)
             if IsValid(status) then status:SetText(L(text or "")) end
+        end
+
+        local function set_scope_status()
+            if state.model_path then
+                set_status(DynamicModelImporter.RepairScopeStatus(state.model_path))
+            else
+                set_status("Select a model by right-clicking an NPC, ragdoll, player, prop, weapon, or viewmodel.")
+            end
         end
 
         local function cleanup_preview()
@@ -477,7 +489,7 @@ if CLIENT then
             cleanup_preview()
             state.materials = {}
             if not state.model_path then
-                set_status("Select a model by right-clicking an NPC, ragdoll, or player.")
+                set_scope_status()
                 populate_materials()
                 return
             end
@@ -493,7 +505,7 @@ if CLIENT then
                 state.materials[#state.materials + 1] = { index = index - 1, path = tostring(materialPath or "") }
             end
             populate_materials()
-            set_status("Loaded repair settings.")
+            set_scope_status()
         end
 
         local function load_model_path(modelPath)
@@ -508,12 +520,13 @@ if CLIENT then
 
         local function save_current(preferredIndex)
             if not state.model_path then
-                set_status("Select a model by right-clicking an NPC, ragdoll, or player.")
+                set_scope_status()
                 return
             end
             state.override = DynamicModelImporter.SanitizeModelOverride(state.override)
             save_override(state.model_path, state.override)
             populate_materials(preferredIndex or current_index())
+            set_scope_status()
         end
 
         materialList.OnRowSelected = function(_, _, line)
@@ -558,7 +571,7 @@ if CLIENT then
             if DynamicModelImporter.NormalizeOverrideModelPath(modelPath) ~= state.model_path then return end
             state.override = copy_model_override(override)
             populate_materials(selected_material_index())
-            set_status("Loaded repair settings.")
+            set_scope_status()
         end)
 
         panel.OnRemove = function()
@@ -571,7 +584,7 @@ if CLIENT then
             if IsValid(panel) and state.model_path then
                 load_model_path(state.model_path)
             else
-                set_status("Select a model by right-clicking an NPC, ragdoll, or player.")
+                set_scope_status()
             end
         end)
     end

@@ -2907,6 +2907,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.current_main_workspace: core.Workspace | None = None
         self.main_pmx_paths: list[Path] = []
         self.main_output_files: dict[str, object] | None = None
+        self._loading_main_source_from_settings = False
         self.workspace_size_worker: WorkspaceSizeWorker | None = None
         self.workspace_cleanup_worker: WorkspaceCleanupWorker | None = None
         self.managed_blender_delete_worker: ManagedBlenderDeleteWorker | None = None
@@ -4762,7 +4763,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.main_refresh_pmx_button.clicked.connect(self.populate_main_pmx_files)
         self.main_pmx_combo.currentIndexChanged.connect(self.on_main_pmx_changed)
         self.main_detect_gmod_button.clicked.connect(self.detect_gmod_for_main)
-        self.main_preflight_button.clicked.connect(lambda: self.analyze_main_pmx(silent=False))
+        self.main_preflight_button.clicked.connect(lambda: self.analyze_main_pmx(silent=False, show_special_warning_dialog=True))
         self.main_import_button.clicked.connect(self.start_full_import)
         self.main_advanced_steps_button.toggled.connect(self.set_advanced_steps_visible)
         self.main_cancel_button.clicked.connect(self.cancel_full_import)
@@ -5039,7 +5040,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.source_row.changed.connect(self.on_source_changed)
         self.refresh_pmx_button.clicked.connect(self.populate_pmx_files)
         self.pmx_combo.currentIndexChanged.connect(self.on_pmx_changed)
-        self.analyze_button.clicked.connect(self.analyze_current_pmx)
+        self.analyze_button.clicked.connect(lambda: self.analyze_current_pmx(silent=False, show_special_warning_dialog=True))
         self.import_button.clicked.connect(self.start_import)
         self.cancel_button.clicked.connect(self.cancel_import)
         self.open_workspace_button.clicked.connect(self.open_workspace)
@@ -8270,7 +8271,11 @@ class ImporterWindow(QtWidgets.QMainWindow):
             source = self.default_sample_dir()
         main_source = str(self.settings_store.value("main_source_dir", source, str) or source)
         if main_source and hasattr(self, "main_source_row"):
-            self.main_source_row.set_value(main_source)
+            self._loading_main_source_from_settings = True
+            try:
+                self.main_source_row.set_value(main_source)
+            finally:
+                self._loading_main_source_from_settings = False
         main_gmod = str(self.settings_store.value("main_gmod_path", "", str) or "")
         if not main_gmod:
             main_gmod = str(self.settings_store.value("qc_gmod_path", "", str) or "")
@@ -8840,18 +8845,23 @@ class ImporterWindow(QtWidgets.QMainWindow):
                 return
 
     def on_main_source_changed(self, _value: str) -> None:
+        if getattr(self, "_loading_main_source_from_settings", False):
+            return
         self.current_main_analysis = None
         self.current_main_workspace = None
         self.main_workspace_edit.clear()
         self.main_stats_label.setText("Refresh PMX files, then run preflight.")
         self.main_warning_label.clear()
+        if hasattr(self, "main_model_name_edit"):
+            self.main_model_name_edit.clear()
+            self.update_main_display_placeholders()
         self.main_open_output_button.setEnabled(False)
         if self.main_model_preview is not None:
             self.main_model_preview.clear_model()
-        self.populate_main_pmx_files()
+        self.populate_main_pmx_files(prefer_saved=False, reset_model_name=True)
         self.save_settings()
 
-    def populate_main_pmx_files(self) -> None:
+    def populate_main_pmx_files(self, prefer_saved: bool = True, reset_model_name: bool = False) -> None:
         source = Path(self.main_source_row.value()) if self.main_source_row.value() else None
         previous = str(self.settings_store.value("main_pmx_path", "", str) or "")
         self.main_pmx_paths = []
@@ -8866,7 +8876,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
                     label = path.name
                 self.main_pmx_combo.addItem(label, str(path))
             selected_index = -1
-            if previous:
+            if prefer_saved and previous:
                 index = self.main_pmx_combo.findData(previous)
                 if index >= 0:
                     selected_index = index
@@ -8876,7 +8886,9 @@ class ImporterWindow(QtWidgets.QMainWindow):
                 self.main_pmx_combo.setCurrentIndex(selected_index)
         self.main_pmx_combo.blockSignals(False)
         if self.main_pmx_paths:
-            self.analyze_main_pmx(silent=True)
+            if reset_model_name:
+                self.set_main_model_name_from_candidate(self.main_model_name_candidate(self.current_main_pmx_path()), force=True)
+            self.analyze_main_pmx(silent=True, reset_model_name=reset_model_name)
         else:
             self.main_stats_label.setText("No .pmx files found in the selected folder.")
             self.main_warning_label.clear()
@@ -8896,7 +8908,37 @@ class ImporterWindow(QtWidgets.QMainWindow):
         raw = self.main_pmx_combo.currentData()
         return Path(str(raw)) if raw else None
 
-    def analyze_main_pmx(self, silent: bool = False) -> core.PmxAnalysis | None:
+    def main_model_name_candidate(self, pmx: Path | None = None, analysis: core.PmxAnalysis | None = None) -> str:
+        raw_candidates: list[str] = []
+        if analysis and analysis.model_name:
+            raw_candidates.append(str(analysis.model_name))
+        if pmx:
+            raw_candidates.append(pmx.stem)
+        for raw in raw_candidates:
+            candidate = re.sub(r"[^A-Za-z_]+", "_", core.slugify(raw)).strip("_")
+            if candidate:
+                return candidate
+        return "mmd_model" if pmx or analysis else ""
+
+    def set_main_model_name_from_candidate(self, candidate: str, force: bool = False) -> None:
+        if not hasattr(self, "main_model_name_edit"):
+            return
+        candidate = re.sub(r"[^A-Za-z_]+", "_", str(candidate or "")).strip("_")
+        if force or not self.main_model_name_edit.text().strip():
+            if candidate:
+                self.main_model_name_edit.setText(candidate)
+            else:
+                self.main_model_name_edit.clear()
+        if candidate:
+            self.main_model_name_edit.setPlaceholderText(f"Optional, default: {candidate}")
+        self.update_main_display_placeholders(default_model=candidate)
+
+    def analyze_main_pmx(
+        self,
+        silent: bool = False,
+        reset_model_name: bool = False,
+        show_special_warning_dialog: bool = False,
+    ) -> core.PmxAnalysis | None:
         pmx = self.current_main_pmx_path()
         source_raw = self.main_source_row.value()
         if not pmx or not source_raw:
@@ -8913,14 +8955,15 @@ class ImporterWindow(QtWidgets.QMainWindow):
             self.main_workspace_edit.setText(str(workspace.root))
             self.render_main_analysis(analysis)
             self.load_main_preview(silent=True)
-            if not self.main_model_name_edit.text().strip():
-                candidate = core.slugify(analysis.model_name or pmx.stem)
-                candidate = re.sub(r"[^A-Za-z_]+", "_", candidate).strip("_")
-                if candidate:
-                    self.main_model_name_edit.setPlaceholderText(f"Optional, default: {candidate}")
-                    self.update_main_display_placeholders(default_model=candidate)
+            candidate = self.main_model_name_candidate(pmx, analysis)
+            if reset_model_name:
+                self.set_main_model_name_from_candidate(candidate, force=True)
+            elif not self.main_model_name_edit.text().strip():
+                self.set_main_model_name_from_candidate(candidate, force=False)
             if not silent:
                 self.append_main_log(f"Analyzed PMX: {pmx}")
+                if show_special_warning_dialog:
+                    self.show_special_preflight_warning_dialog(analysis)
             self.save_settings()
             return analysis
         except Exception as exc:
@@ -9516,6 +9559,76 @@ class ImporterWindow(QtWidgets.QMainWindow):
         missing = getattr(analysis, "missing_required_skeleton_bones", None)
         return bool(isinstance(missing, list) and missing)
 
+    def analysis_has_koikatsu_bone_warning(self, analysis: core.PmxAnalysis | None) -> bool:
+        if analysis is None:
+            return False
+        count = getattr(analysis, "koikatsu_bone_hint_count", 0)
+        try:
+            return int(count or 0) > 100
+        except Exception:
+            return any(str(warning or "").startswith("Koikatsu-style bone names detected:") for warning in analysis.warnings)
+
+    def show_special_preflight_warning_dialog(self, analysis: core.PmxAnalysis) -> None:
+        skeleton_failed = self.analysis_has_required_skeleton_failure(analysis)
+        koikatsu_warning = self.analysis_has_koikatsu_bone_warning(analysis)
+        if not skeleton_failed and not koikatsu_warning:
+            return
+
+        dialog = QtWidgets.QMessageBox(self)
+        dialog.setIcon(QtWidgets.QMessageBox.Icon.Warning)
+        if skeleton_failed:
+            dialog.setWindowTitle(self._t("preflight.title_skeleton_failed", "MMD skeleton compatibility warning"))
+            dialog.setText(
+                self._t(
+                    "preflight.skeleton_expected_fail",
+                    "This import is expected to fail because the PMX does not use the required MMD humanoid bone names.",
+                )
+            )
+            missing_bones = getattr(analysis, "missing_required_skeleton_bones", []) if analysis else []
+            missing_lines = [f"- {bone}" for bone in missing_bones[:24]]
+            if len(missing_bones) > 24:
+                missing_lines.append(f"- ... {len(missing_bones) - 24} more")
+            lines = [self._t("preflight.skeleton_missing_exact_bones", "Missing exact required bones:")]
+            lines.extend(missing_lines)
+            other_warnings = [
+                self.translate_preflight_warning(warning)
+                for warning in analysis.warnings
+                if not str(warning or "").startswith("MMD skeleton compatibility check failed:")
+            ]
+        else:
+            dialog.setWindowTitle(self._t("preflight.title_koikatsu", "Koikatsu model compatibility warning"))
+            dialog.setText(
+                self._t(
+                    "preflight.koikatsu_expected_fail",
+                    "Your model looks like it is from Koikatsu, and the import is likely to fail unless the model was simplified to Very Simple level in the KKBP Blender plugin.",
+                )
+            )
+            lines = [
+                self.translate_preflight_warning(warning)
+                for warning in analysis.warnings
+                if str(warning or "").startswith("Koikatsu-style bone names detected:")
+            ]
+            if not lines:
+                lines = [
+                    self._t(
+                        "preflight.koikatsu_ignore_if_optimized",
+                        "You can ignore this warning only if you are sure that your model is optimized for MikuMikuDance.",
+                    )
+                ]
+            other_warnings = [
+                self.translate_preflight_warning(warning)
+                for warning in analysis.warnings
+                if not str(warning or "").startswith("Koikatsu-style bone names detected:")
+            ]
+
+        if other_warnings:
+            lines.append("")
+            lines.append(self._t("preflight.other_warnings", "Other preflight warnings:"))
+            lines.extend(f"- {warning}" for warning in other_warnings)
+        dialog.setInformativeText("\n".join(lines))
+        dialog.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
+        dialog.exec()
+
     def confirm_preflight_warnings(
         self,
         analysis: core.PmxAnalysis,
@@ -9528,10 +9641,13 @@ class ImporterWindow(QtWidgets.QMainWindow):
         scan = getattr(analysis, "content_warning_scan", {}) if analysis else {}
         content_triggered = isinstance(scan, dict) and bool(scan.get("triggered"))
         skeleton_failed = self.analysis_has_required_skeleton_failure(analysis)
+        koikatsu_warning = self.analysis_has_koikatsu_bone_warning(analysis)
         if content_triggered:
             dialog.setWindowTitle(self._t("preflight.title_nsfw", "Potential NSFW model content"))
         elif skeleton_failed:
             dialog.setWindowTitle(self._t("preflight.title_skeleton_failed", "MMD skeleton compatibility warning"))
+        elif koikatsu_warning:
+            dialog.setWindowTitle(self._t("preflight.title_koikatsu", "Koikatsu model compatibility warning"))
         else:
             dialog.setWindowTitle(title)
         if content_triggered:
@@ -9616,12 +9732,40 @@ class ImporterWindow(QtWidgets.QMainWindow):
                 lines.append(self._t("preflight.other_warnings", "Other preflight warnings:"))
                 lines.extend(f"- {warning}" for warning in other_warnings)
             dialog.setInformativeText("\n".join(lines))
+        elif koikatsu_warning:
+            dialog.setText(
+                self._t(
+                    "preflight.koikatsu_expected_fail",
+                    "Your model looks like it is from Koikatsu, and the import is likely to fail unless the model was simplified to Very Simple level in the KKBP Blender plugin.",
+                )
+            )
+            koikatsu_warnings = [
+                self.translate_preflight_warning(warning)
+                for warning in analysis.warnings
+                if str(warning or "").startswith("Koikatsu-style bone names detected:")
+            ]
+            lines = koikatsu_warnings or [
+                self._t(
+                    "preflight.koikatsu_ignore_if_optimized",
+                    "You can ignore this warning only if you are sure that your model is optimized for MikuMikuDance.",
+                )
+            ]
+            other_warnings = [
+                self.translate_preflight_warning(warning)
+                for warning in analysis.warnings
+                if not str(warning or "").startswith("Koikatsu-style bone names detected:")
+            ]
+            if other_warnings:
+                lines.append("")
+                lines.append(self._t("preflight.other_warnings", "Other preflight warnings:"))
+                lines.extend(f"- {warning}" for warning in other_warnings)
+            dialog.setInformativeText("\n".join(lines))
         else:
             dialog.setText(generic_text)
             dialog.setInformativeText("\n".join(self.translate_preflight_warning(warning) for warning in analysis.warnings))
         proceed = dialog.addButton(
             self._t("preflight.proceed_anyway", "Proceed Anyway")
-            if content_triggered or skeleton_failed
+            if content_triggered or skeleton_failed or koikatsu_warning
             else self._t("common.proceed", "Proceed"),
             QtWidgets.QMessageBox.ButtonRole.AcceptRole,
         )
@@ -9685,6 +9829,23 @@ class ImporterWindow(QtWidgets.QMainWindow):
         match = re.fullmatch(r"High morph/shapekey count: ([\d,]+); later flex work may be slow\.", text)
         if match:
             return self._t("preflight.warning_high_morph_count", "High morph/shapekey count: {count}; later flex work may be slow.", count=match.group(1))
+        match = re.fullmatch(r"High bone count: ([\d,]+) bones; importing may be slow\.", text)
+        if match:
+            return self._t(
+                "preflight.warning_high_bone_count",
+                "High bone count: {count} bones; importing may be slow.",
+                count=match.group(1),
+            )
+        match = re.fullmatch(
+            r"Koikatsu-style bone names detected: ([\d,]+) bones contain cf_ or k_f_\. Your model looks like it is from Koikatsu, and the import is likely to fail if your model is not simplified to Very Simple level in KKBP Blender plugin\. You can ignore this warning only if you are sure that your model is optimized for MikuMikuDance\.",
+            text,
+        )
+        if match:
+            return self._t(
+                "preflight.warning_koikatsu_bones",
+                "Koikatsu-style bone names detected: {count} bones contain cf_ or k_f_. Your model looks like it is from Koikatsu, and the import is likely to fail if your model is not simplified to Very Simple level in KKBP Blender plugin. You can ignore this warning only if you are sure that your model is optimized for MikuMikuDance.",
+                count=match.group(1),
+            )
         match = re.fullmatch(
             r"Potential NSFW shapekey names detected: ([\d,]+) keyword matches across ([\d,]+) morphs\. Auto porting is not optimized for this kind of model\.",
             text,
@@ -10155,7 +10316,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
             return Path(str(raw))
         return None
 
-    def analyze_current_pmx(self, silent: bool = False) -> core.PmxAnalysis | None:
+    def analyze_current_pmx(self, silent: bool = False, show_special_warning_dialog: bool = False) -> core.PmxAnalysis | None:
         pmx = self.current_pmx_path()
         source_raw = self.source_row.value()
         if not pmx or not source_raw:
@@ -10175,6 +10336,8 @@ class ImporterWindow(QtWidgets.QMainWindow):
             self.load_current_preview(silent=True)
             if not silent:
                 self.append_log(f"Analyzed PMX: {pmx}")
+                if show_special_warning_dialog:
+                    self.show_special_preflight_warning_dialog(analysis)
             self.save_settings()
             return analysis
         except Exception as exc:
@@ -10245,7 +10408,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         if self.worker and self.worker.isRunning():
             return
         self.set_step_working(1, "Preparing Step 1 import")
-        analysis = self.analyze_current_pmx(silent=False)
+        analysis = self.analyze_current_pmx(silent=False, show_special_warning_dialog=False)
         pmx = self.current_pmx_path()
         source = self.source_row.value()
         if not analysis or not pmx or not source:
@@ -19208,7 +19371,8 @@ class ImporterWindow(QtWidgets.QMainWindow):
         text = QtWidgets.QPlainTextEdit()
         text.setReadOnly(True)
         enriched_message = core.enrich_missing_output_message(str(message))
-        text.setPlainText(self.translate_multiline_runtime_text(enriched_message))
+        error_log_text = self.translate_multiline_runtime_text(enriched_message)
+        text.setPlainText(error_log_text)
         support_label = QtWidgets.QLabel(
             self._t(
                 "error.report_instruction",
@@ -19227,12 +19391,29 @@ class ImporterWindow(QtWidgets.QMainWindow):
         )
         report_button = QtWidgets.QPushButton(self._t("error.raise_issue_github", "Raise Issue on GitHub"))
         report_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning))
+        report_button.setMinimumHeight(42)
+        report_button.setMinimumWidth(260)
+        report_button.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        report_font = report_button.font()
+        report_font.setBold(True)
+        report_button.setFont(report_font)
+        report_button.setStyleSheet(
+            "QPushButton { padding: 8px 16px; font-weight: 700; }"
+        )
         report_button.clicked.connect(lambda: self.open_external_url(REPORT_ISSUE_URL))
+        copy_log_button = QtWidgets.QPushButton(self._t("common.copy_log", "Copy Log"))
+        copy_log_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogSaveButton))
+
+        def copy_error_log() -> None:
+            QtWidgets.QApplication.clipboard().setText(error_log_text)
+            self.statusBar().showMessage(self._t("error.log_copied", "Error log copied to clipboard."), 5000)
+
+        copy_log_button.clicked.connect(copy_error_log)
         close_button = QtWidgets.QPushButton(self._t("common.close", "Close"))
         close_button.clicked.connect(dialog.accept)
         button_layout = QtWidgets.QHBoxLayout()
-        button_layout.addWidget(report_button, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
-        button_layout.addStretch(1)
+        button_layout.addWidget(report_button, 1)
+        button_layout.addWidget(copy_log_button, 0)
         button_layout.addWidget(close_button, 0, QtCore.Qt.AlignmentFlag.AlignRight)
         layout.addWidget(text, 1)
         layout.addWidget(support_label, 0)

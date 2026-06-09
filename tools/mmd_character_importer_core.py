@@ -188,6 +188,7 @@ class PmxAnalysis:
     texture_ref_count: int = 0
     material_count: int = 0
     bone_count: int = 0
+    koikatsu_bone_hint_count: int = 0
     morph_count: int = 0
     morph_names: list[str] = field(default_factory=list)
     texture_file_count: int = 0
@@ -1955,16 +1956,21 @@ def analyze_pmx(pmx_path: Path, source_dir: Path | None = None) -> PmxAnalysis:
         analysis.bone_count = reader.read_i32()
         bone_names: set[str] = set()
         exact_bone_names: set[str] = set()
+        koikatsu_bone_hint_count = 0
         for _ in range(analysis.bone_count):
             name, english_name = read_bone_names(reader, analysis.encoding, bone_index_size)
             stripped_name = name.strip()
             stripped_english_name = english_name.strip()
+            lower_bone_names = [value.lower() for value in (stripped_name, stripped_english_name) if value]
+            if any("cf_" in value or "k_f_" in value for value in lower_bone_names):
+                koikatsu_bone_hint_count += 1
             if stripped_name:
                 exact_bone_names.add(stripped_name)
                 bone_names.add(stripped_name.lower())
             if stripped_english_name:
                 exact_bone_names.add(stripped_english_name)
                 bone_names.add(stripped_english_name.lower())
+        analysis.koikatsu_bone_hint_count = koikatsu_bone_hint_count
 
         analysis.morph_count = reader.read_i32()
         for _ in range(analysis.morph_count):
@@ -2031,6 +2037,15 @@ def analyze_pmx(pmx_path: Path, source_dir: Path | None = None) -> PmxAnalysis:
         warnings.append(
             f"High vertex count: {analysis.vertex_count:,} vertices; "
             "importing may take a long time and produce unexpected results."
+        )
+    if analysis.bone_count > 600:
+        warnings.append(f"High bone count: {analysis.bone_count:,} bones; importing may be slow.")
+    if analysis.koikatsu_bone_hint_count > 100:
+        warnings.append(
+            f"Koikatsu-style bone names detected: {analysis.koikatsu_bone_hint_count:,} bones contain cf_ or k_f_. "
+            "Your model looks like it is from Koikatsu, and the import is likely to fail if your model is not "
+            "simplified to Very Simple level in KKBP Blender plugin. You can ignore this warning only if you are "
+            "sure that your model is optimized for MikuMikuDance."
         )
     if analysis.morph_count > 96:
         warnings.append(f"High morph/shapekey count: {analysis.morph_count:,}; later flex work may be slow.")
