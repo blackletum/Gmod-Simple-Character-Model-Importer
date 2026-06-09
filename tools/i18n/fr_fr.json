@@ -10,6 +10,11 @@
     "select_folder": "Sélectionner un dossier",
     "step_locked": "Étape verrouillée"
   },
+  "error": {
+    "raise_issue_github": "Créer une issue sur GitHub",
+    "report_instruction": "Si cette erreur est reproductible, veuillez créer une issue sur GitHub et joindre si possible le journal d’erreur, une capture d’écran et le fichier du modèle.",
+    "report_channel_warning": "Ne signalez pas les problèmes sur la page Steam Workshop de l’addon ni dans les commentaires vidéo ; ils ne sont pas surveillés pour le support."
+  },
   "external_logs": {
     "mmd_tools.warning.not_found_bone": "WARNING: not found bone {bone_name} ({frame_count} frames)",
     "mmd_tools.warning.not_found_shape_key": "WARNING: not found shape key {shape_key} ({frame_count} frames)",
@@ -4232,8 +4237,11 @@
   "preflight": {
     "title": "Avertissements de pré-vérification",
     "title_nsfw": "Contenu de modèle potentiellement NSFW",
+    "title_skeleton_failed": "Avertissement de compatibilité du squelette MMD",
     "generic_import": "Ce PMX contient des avertissements. Continuer l’import ?",
     "generic_full_import": "Ce PMX contient des avertissements. Continuer l’import complet ?",
+    "skeleton_expected_fail": "Cet import devrait échouer, car le PMX n’utilise pas les noms d’os humanoïdes MMD requis.",
+    "skeleton_missing_exact_bones": "Os requis manquants avec correspondance exacte :",
     "nsfw_description": "Le programme a détecté des éléments potentiellement NSFW dans le modèle fourni. Ce type de modèle est déconseillé, et l’import automatique n’est pas optimisé pour cela ; des résultats inattendus peuvent se produire.",
     "nsfw_detected": "{match_count} correspondance(s) de mots-clés détectée(s) dans {morph_count} nom(s) de shapekey/morph.",
     "nsfw_continue_full": "Si vous continuez, le flux manuel étape par étape est recommandé plutôt que l’import automatique en un clic.",
@@ -4246,6 +4254,7 @@
     "warning_label": "Avertissements :",
     "no_warnings": "Aucun avertissement de pré-vérification.",
     "warning_missing_skeleton_groups": "Groupes de squelette humanoïde MMD attendus manquants : {groups}",
+    "warning_required_skeleton_missing": "La vérification de compatibilité du squelette MMD a échoué : os requis manquants avec correspondance exacte : {bones}. L’import devrait échouer, car le modèle n’utilise pas les noms d’os humanoïdes MMD requis.",
     "warning_no_native_textures": "Aucun fichier de texture natif n’a été trouvé dans le dossier du modèle sélectionné.",
     "warning_unresolved_texture_refs": "{count} référence(s) de texture PMX n’ont pas pu être résolues : {refs}",
     "warning_unresolved_texture_refs_more": "{count} référence(s) de texture PMX n’ont pas pu être résolues : {refs}, et {more_count} de plus",

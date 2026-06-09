@@ -10,6 +10,11 @@
     "select_folder": "Выбрать папку",
     "step_locked": "Шаг заблокирован"
   },
+  "error": {
+    "raise_issue_github": "Создать issue на GitHub",
+    "report_instruction": "Если ошибка воспроизводится, создайте issue на GitHub и по возможности приложите журнал ошибки, снимок экрана и файл модели.",
+    "report_channel_warning": "Пожалуйста, не сообщайте о проблемах на странице аддона Steam Workshop или в комментариях к видео; разработчик не отслеживает их для поддержки."
+  },
   "external_logs": {
     "mmd_tools.warning.not_found_bone": "WARNING: not found bone {bone_name} ({frame_count} frames)",
     "mmd_tools.warning.not_found_shape_key": "WARNING: not found shape key {shape_key} ({frame_count} frames)",
@@ -4232,8 +4237,11 @@
   "preflight": {
     "title": "Предупреждения предварительной проверки",
     "title_nsfw": "Возможное NSFW-содержимое модели",
+    "title_skeleton_failed": "Предупреждение о совместимости скелета MMD",
     "generic_import": "У этого PMX есть предупреждения. Продолжить импорт?",
     "generic_full_import": "У этого PMX есть предупреждения. Продолжить полный импорт?",
+    "skeleton_expected_fail": "Ожидается, что импорт завершится неудачно, потому что PMX не использует обязательные имена гуманоидных костей MMD.",
+    "skeleton_missing_exact_bones": "Отсутствуют обязательные кости с точным совпадением:",
     "nsfw_description": "Программа обнаружила возможные NSFW-элементы в предоставленной модели. Импорт таких моделей не рекомендуется, а автоматический перенос для них не оптимизирован и может дать неожиданные результаты.",
     "nsfw_detected": "Обнаружено {match_count} совпадение(й) ключевых слов в {morph_count} имени(ах) shapekey/morph.",
     "nsfw_continue_full": "Если вы продолжите, рекомендуется ручной пошаговый процесс вместо автоматического переноса в один клик.",
@@ -4246,6 +4254,7 @@
     "warning_label": "Предупреждения:",
     "no_warnings": "Нет предупреждений предварительной проверки.",
     "warning_missing_skeleton_groups": "Отсутствуют ожидаемые группы гуманоидного скелета MMD: {groups}",
+    "warning_required_skeleton_missing": "Проверка совместимости скелета MMD не пройдена: отсутствуют обязательные кости с точным совпадением: {bones}. Ожидается, что импорт завершится неудачно, потому что модель не использует обязательные имена гуманоидных костей MMD.",
     "warning_no_native_textures": "В выбранной папке модели не найдены исходные файлы текстур.",
     "warning_unresolved_texture_refs": "Не удалось разрешить {count} ссылку(и) на текстуры PMX: {refs}",
     "warning_unresolved_texture_refs_more": "Не удалось разрешить {count} ссылку(и) на текстуры PMX: {refs}, и ещё {more_count}",

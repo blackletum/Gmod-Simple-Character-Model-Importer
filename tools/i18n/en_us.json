@@ -49,6 +49,11 @@
     "select_folder": "Select folder",
     "step_locked": "Step Locked"
   },
+  "error": {
+    "raise_issue_github": "Raise Issue on GitHub",
+    "report_instruction": "If this error is reproducible, please raise an issue on GitHub and include the error log, a screenshot, and the model file when possible.",
+    "report_channel_warning": "Please do not report issues on the Steam Workshop addon page or video comment sections; they are not monitored for support."
+  },
   "external_logs": {
     "blender.warning.collection_bones_edit": "Warning: `Collection.bones` is not available in armature edit mode",
     "blender.warning.no_mesh_to_join": "Warning: No mesh data to join",
@@ -4232,8 +4237,11 @@
   "preflight": {
     "title": "Preflight warnings",
     "title_nsfw": "Potential NSFW model content",
+    "title_skeleton_failed": "MMD skeleton compatibility warning",
     "generic_import": "The PMX has warnings. Proceed with import?",
     "generic_full_import": "The PMX has warnings. Proceed with the full import?",
+    "skeleton_expected_fail": "This import is expected to fail because the PMX does not use the required MMD humanoid bone names.",
+    "skeleton_missing_exact_bones": "Missing exact required bones:",
     "nsfw_description": "The program detected NSFW elements in the model you provided. It is not encouraged to do so, and the automatic porting function is not optimized for that and might return unexpected results.",
     "nsfw_detected": "Detected {match_count} keyword match(es) across {morph_count} shapekey/morph name(s).",
     "nsfw_continue_full": "If you intend to continue, the manual step-by-step workflow is recommended over one-click auto porting.",
@@ -4246,6 +4254,7 @@
     "warning_label": "Warnings:",
     "no_warnings": "No preflight warnings.",
     "warning_missing_skeleton_groups": "Missing expected MMD humanoid skeleton groups: {groups}",
+    "warning_required_skeleton_missing": "MMD skeleton compatibility check failed: missing exact required bones: {bones}. Import is expected to fail because the model does not use the required MMD humanoid bone names.",
     "warning_no_native_textures": "No native texture files were found in the selected model folder.",
     "warning_unresolved_texture_refs": "{count} PMX texture references could not be resolved: {refs}",
     "warning_unresolved_texture_refs_more": "{count} PMX texture references could not be resolved: {refs} and {more_count} more",

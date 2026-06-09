@@ -9510,6 +9510,12 @@ class ImporterWindow(QtWidgets.QMainWindow):
         scan = getattr(analysis, "content_warning_scan", None)
         return bool(isinstance(scan, dict) and scan.get("triggered"))
 
+    def analysis_has_required_skeleton_failure(self, analysis: core.PmxAnalysis | None) -> bool:
+        if analysis is None:
+            return False
+        missing = getattr(analysis, "missing_required_skeleton_bones", None)
+        return bool(isinstance(missing, list) and missing)
+
     def confirm_preflight_warnings(
         self,
         analysis: core.PmxAnalysis,
@@ -9521,7 +9527,13 @@ class ImporterWindow(QtWidgets.QMainWindow):
         dialog.setIcon(QtWidgets.QMessageBox.Icon.Warning)
         scan = getattr(analysis, "content_warning_scan", {}) if analysis else {}
         content_triggered = isinstance(scan, dict) and bool(scan.get("triggered"))
-        dialog.setWindowTitle(self._t("preflight.title_nsfw", "Potential NSFW model content") if content_triggered else title)
+        skeleton_failed = self.analysis_has_required_skeleton_failure(analysis)
+        if content_triggered:
+            dialog.setWindowTitle(self._t("preflight.title_nsfw", "Potential NSFW model content"))
+        elif skeleton_failed:
+            dialog.setWindowTitle(self._t("preflight.title_skeleton_failed", "MMD skeleton compatibility warning"))
+        else:
+            dialog.setWindowTitle(title)
         if content_triggered:
             dialog.setText(
                 self._t(
@@ -9581,11 +9593,36 @@ class ImporterWindow(QtWidgets.QMainWindow):
                 lines.append(self._t("preflight.other_warnings", "Other preflight warnings:"))
                 lines.extend(f"- {warning}" for warning in other_warnings)
             dialog.setInformativeText("\n".join(lines))
+        elif skeleton_failed:
+            dialog.setText(
+                self._t(
+                    "preflight.skeleton_expected_fail",
+                    "This import is expected to fail because the PMX does not use the required MMD humanoid bone names.",
+                )
+            )
+            missing_bones = getattr(analysis, "missing_required_skeleton_bones", []) if analysis else []
+            missing_lines = [f"- {bone}" for bone in missing_bones[:24]]
+            if len(missing_bones) > 24:
+                missing_lines.append(f"- ... {len(missing_bones) - 24} more")
+            lines = [self._t("preflight.skeleton_missing_exact_bones", "Missing exact required bones:")]
+            lines.extend(missing_lines)
+            other_warnings = [
+                self.translate_preflight_warning(warning)
+                for warning in analysis.warnings
+                if not str(warning or "").startswith("MMD skeleton compatibility check failed:")
+            ]
+            if other_warnings:
+                lines.append("")
+                lines.append(self._t("preflight.other_warnings", "Other preflight warnings:"))
+                lines.extend(f"- {warning}" for warning in other_warnings)
+            dialog.setInformativeText("\n".join(lines))
         else:
             dialog.setText(generic_text)
             dialog.setInformativeText("\n".join(self.translate_preflight_warning(warning) for warning in analysis.warnings))
         proceed = dialog.addButton(
-            self._t("preflight.proceed_anyway", "Proceed Anyway") if content_triggered else self._t("common.proceed", "Proceed"),
+            self._t("preflight.proceed_anyway", "Proceed Anyway")
+            if content_triggered or skeleton_failed
+            else self._t("common.proceed", "Proceed"),
             QtWidgets.QMessageBox.ButtonRole.AcceptRole,
         )
         dialog.addButton(self._t("common.cancel", "Cancel"), QtWidgets.QMessageBox.ButtonRole.RejectRole)
@@ -9597,6 +9634,15 @@ class ImporterWindow(QtWidgets.QMainWindow):
         text = str(warning or "")
         if not text:
             return text
+        prefix = "MMD skeleton compatibility check failed: missing exact required bones: "
+        suffix = ". Import is expected to fail because the model does not use the required MMD humanoid bone names."
+        if text.startswith(prefix) and text.endswith(suffix):
+            bones = text[len(prefix) : -len(suffix)]
+            return self._t(
+                "preflight.warning_required_skeleton_missing",
+                "MMD skeleton compatibility check failed: missing exact required bones: {bones}. Import is expected to fail because the model does not use the required MMD humanoid bone names.",
+                bones=bones,
+            )
         match = re.fullmatch(r"Missing expected MMD humanoid skeleton groups: (.+)", text)
         if match:
             return self._t("preflight.warning_missing_skeleton_groups", "Missing expected MMD humanoid skeleton groups: {groups}", groups=match.group(1))
@@ -19161,11 +19207,36 @@ class ImporterWindow(QtWidgets.QMainWindow):
         layout = QtWidgets.QVBoxLayout(dialog)
         text = QtWidgets.QPlainTextEdit()
         text.setReadOnly(True)
-        text.setPlainText(self.translate_multiline_runtime_text(str(message)))
+        enriched_message = core.enrich_missing_output_message(str(message))
+        text.setPlainText(self.translate_multiline_runtime_text(enriched_message))
+        support_label = QtWidgets.QLabel(
+            self._t(
+                "error.report_instruction",
+                "If this error is reproducible, please raise an issue on GitHub and include the error log, a screenshot, and the model file when possible.",
+            )
+            + "\n"
+            + self._t(
+                "error.report_channel_warning",
+                "Please do not report issues on the Steam Workshop addon page or video comment sections; they are not monitored for support.",
+            )
+        )
+        support_label.setWordWrap(True)
+        support_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
+        support_label.setStyleSheet(
+            "QLabel { color: #d29922; border: 1px solid #8a6d1f; border-radius: 4px; padding: 8px; }"
+        )
+        report_button = QtWidgets.QPushButton(self._t("error.raise_issue_github", "Raise Issue on GitHub"))
+        report_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning))
+        report_button.clicked.connect(lambda: self.open_external_url(REPORT_ISSUE_URL))
         close_button = QtWidgets.QPushButton(self._t("common.close", "Close"))
         close_button.clicked.connect(dialog.accept)
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addWidget(report_button, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
+        button_layout.addStretch(1)
+        button_layout.addWidget(close_button, 0, QtCore.Qt.AlignmentFlag.AlignRight)
         layout.addWidget(text, 1)
-        layout.addWidget(close_button, 0, QtCore.Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(support_label, 0)
+        layout.addLayout(button_layout)
         dialog.exec()
         if not (self.worker and self.worker.isRunning()):
             for step, state in list(self.workflow_states.items()):

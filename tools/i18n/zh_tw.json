@@ -49,6 +49,11 @@
     "select_folder": "選擇文件夾",
     "step_locked": "步驟已鎖定"
   },
+  "error": {
+    "raise_issue_github": "在 GitHub 提交問題",
+    "report_instruction": "如果此錯誤可以重現，請在 GitHub 提交 issue，並盡可能附上錯誤日誌、截圖和模型檔案。",
+    "report_channel_warning": "請不要在 Steam 工作坊插件頁面或影片留言區回報問題；開發者不會透過這些位置處理支援請求。"
+  },
   "external_logs": {
     "mmd_tools.warning.not_found_bone": "警告：未找到骨骼 {bone_name}（{frame_count} 幀）",
     "mmd_tools.warning.not_found_shape_key": "警告：未找到形態鍵 {shape_key}（{frame_count} 幀）",
@@ -4232,8 +4237,11 @@
   "preflight": {
     "title": "預檢警告",
     "title_nsfw": "可能包含 NSFW 模型內容",
+    "title_skeleton_failed": "MMD 骨架相容性警告",
     "generic_import": "此 PMX 存在警告。是否繼續匯入？",
     "generic_full_import": "此 PMX 存在警告。是否繼續完整匯入？",
+    "skeleton_expected_fail": "此次匯入預計會失敗，因為該 PMX 未使用所需的 MMD 人形骨骼名稱。",
+    "skeleton_missing_exact_bones": "缺少以下精確匹配的必需骨骼：",
     "nsfw_description": "程式偵測到你提供的模型中可能存在 NSFW 內容。不建議匯入此類模型，自動移植流程也未針對這種模型最佳化，可能產生異常結果。",
     "nsfw_detected": "偵測到 {match_count} 個關鍵字匹配，涉及 {morph_count} 個形態鍵/表情名稱。",
     "nsfw_continue_full": "如果仍要繼續，建議使用手動分步流程，而不是一鍵自動移植。",
@@ -4246,6 +4254,7 @@
     "warning_label": "警告：",
     "no_warnings": "沒有預檢警告。",
     "warning_missing_skeleton_groups": "缺少預期的 MMD 人形骨骼組：{groups}",
+    "warning_required_skeleton_missing": "MMD 骨架相容性檢查失敗：缺少精確匹配的必需骨骼：{bones}。此次匯入預計會失敗，因為該模型未使用所需的 MMD 人形骨骼名稱。",
     "warning_no_native_textures": "在所選模型資料夾中未找到原始貼圖檔案。",
     "warning_unresolved_texture_refs": "{count} 個 PMX 貼圖引用無法解析：{refs}",
     "warning_unresolved_texture_refs_more": "{count} 個 PMX 貼圖引用無法解析：{refs}，以及另外 {more_count} 個",

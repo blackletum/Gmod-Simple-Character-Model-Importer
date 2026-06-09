@@ -10,6 +10,11 @@
     "select_folder": "폴더 선택",
     "step_locked": "단계 잠김"
   },
+  "error": {
+    "raise_issue_github": "GitHub에 이슈 등록",
+    "report_instruction": "이 오류를 재현할 수 있다면 GitHub에 이슈를 등록하고 가능하면 오류 로그, 스크린샷, 모델 파일을 함께 제공해 주세요.",
+    "report_channel_warning": "Steam Workshop 애드온 페이지나 동영상 댓글에는 문제를 보고하지 마세요. 개발자가 지원용으로 확인하지 않습니다."
+  },
   "external_logs": {
     "mmd_tools.warning.not_found_bone": "WARNING: not found bone {bone_name} ({frame_count} frames)",
     "mmd_tools.warning.not_found_shape_key": "WARNING: not found shape key {shape_key} ({frame_count} frames)",
@@ -4232,8 +4237,11 @@
   "preflight": {
     "title": "사전 검사 경고",
     "title_nsfw": "NSFW 가능성이 있는 모델 콘텐츠",
+    "title_skeleton_failed": "MMD 스켈레톤 호환성 경고",
     "generic_import": "이 PMX에 경고가 있습니다. 가져오기를 계속할까요?",
     "generic_full_import": "이 PMX에 경고가 있습니다. 전체 가져오기를 계속할까요?",
+    "skeleton_expected_fail": "이 PMX가 필요한 MMD 휴머노이드 본 이름을 사용하지 않으므로 가져오기가 실패할 것으로 예상됩니다.",
+    "skeleton_missing_exact_bones": "정확히 일치하지 않아 누락된 필수 본:",
     "nsfw_description": "제공한 모델에서 NSFW 요소가 감지되었습니다. 이러한 모델은 권장되지 않으며 자동 포팅 기능도 이에 최적화되어 있지 않아 예상치 못한 결과가 발생할 수 있습니다.",
     "nsfw_detected": "{morph_count}개의 쉐이프키/모프 이름에서 {match_count}개의 키워드 일치가 감지되었습니다.",
     "nsfw_continue_full": "계속하려면 원클릭 자동 포팅보다 수동 단계별 워크플로를 사용하는 것이 좋습니다.",
@@ -4246,6 +4254,7 @@
     "warning_label": "경고:",
     "no_warnings": "사전 검사 경고가 없습니다.",
     "warning_missing_skeleton_groups": "예상된 MMD 휴머노이드 스켈레톤 그룹이 없습니다: {groups}",
+    "warning_required_skeleton_missing": "MMD 스켈레톤 호환성 검사 실패: 정확히 일치하는 필수 본이 누락되었습니다: {bones}. 이 모델이 필요한 MMD 휴머노이드 본 이름을 사용하지 않으므로 가져오기가 실패할 것으로 예상됩니다.",
     "warning_no_native_textures": "선택한 모델 폴더에서 원본 텍스처 파일을 찾을 수 없습니다.",
     "warning_unresolved_texture_refs": "{count}개의 PMX 텍스처 참조를 확인할 수 없습니다: {refs}",
     "warning_unresolved_texture_refs_more": "{count}개의 PMX 텍스처 참조를 확인할 수 없습니다: {refs}, 그 외 {more_count}개",

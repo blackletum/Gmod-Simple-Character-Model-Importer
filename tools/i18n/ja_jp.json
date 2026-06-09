@@ -10,6 +10,11 @@
     "select_folder": "フォルダを選択",
     "step_locked": "ステップがロックされました"
   },
+  "error": {
+    "raise_issue_github": "GitHub で Issue を作成",
+    "report_instruction": "このエラーを再現できる場合は、GitHub で issue を作成し、可能であればエラーログ、スクリーンショット、モデルファイルを添付してください。",
+    "report_channel_warning": "Steam Workshop のアドオンページや動画コメント欄では問題を報告しないでください。開発者はサポート用に確認していません。"
+  },
   "external_logs": {
     "mmd_tools.warning.not_found_bone": "WARNING: not found bone {bone_name} ({frame_count} frames)",
     "mmd_tools.warning.not_found_shape_key": "WARNING: not found shape key {shape_key} ({frame_count} frames)",
@@ -4232,8 +4237,11 @@
   "preflight": {
     "title": "プリフライト警告",
     "title_nsfw": "NSFW の可能性があるモデル内容",
+    "title_skeleton_failed": "MMD スケルトン互換性警告",
     "generic_import": "この PMX には警告があります。インポートを続行しますか？",
     "generic_full_import": "この PMX には警告があります。フルインポートを続行しますか？",
+    "skeleton_expected_fail": "この PMX は必要な MMD 人型ボーン名を使用していないため、インポートは失敗する可能性が高いです。",
+    "skeleton_missing_exact_bones": "完全一致で見つからない必須ボーン:",
     "nsfw_description": "指定されたモデルに NSFW 要素が検出されました。この種類のモデルのインポートは推奨されず、自動移植機能も最適化されていないため、予期しない結果になる可能性があります。",
     "nsfw_detected": "{morph_count} 個のシェイプキー/モーフ名で {match_count} 件のキーワード一致が検出されました。",
     "nsfw_continue_full": "続行する場合は、ワンクリック自動移植ではなく手動のステップ別ワークフローを推奨します。",
@@ -4246,6 +4254,7 @@
     "warning_label": "警告:",
     "no_warnings": "プリフライト警告はありません。",
     "warning_missing_skeleton_groups": "想定される MMD 人型スケルトングループがありません: {groups}",
+    "warning_required_skeleton_missing": "MMD スケルトン互換性チェックに失敗しました。完全一致で見つからない必須ボーン: {bones}。このモデルは必要な MMD 人型ボーン名を使用していないため、インポートは失敗する可能性が高いです。",
     "warning_no_native_textures": "選択したモデルフォルダーに元のテクスチャファイルが見つかりません。",
     "warning_unresolved_texture_refs": "{count} 個の PMX テクスチャ参照を解決できませんでした: {refs}",
     "warning_unresolved_texture_refs_more": "{count} 個の PMX テクスチャ参照を解決できませんでした: {refs}、ほか {more_count} 件",

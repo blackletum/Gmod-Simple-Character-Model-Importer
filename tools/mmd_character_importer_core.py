@@ -86,6 +86,7 @@ STEP_COMPLETE_MARKER = "step_complete.json"
 STEP_MARKER_SCHEMA_VERSION = 1
 SYSTEM_BLENDER_WARNING_CHECKED = False
 WINDOWS_STATUS_DLL_INIT_FAILED_CODES = {0xC0000142, -1073741502}
+MISSING_OUTPUT_RE = re.compile(r"Blender(?: render)? completed but did not write (?P<path>[^\r\n]+)")
 
 
 TEXTURE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tga", ".dds", ".spa", ".sph"}
@@ -150,6 +151,29 @@ HUMANOID_SKELETON_GROUPS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+REQUIRED_MMD_SKELETON_BONES: tuple[tuple[str, str], ...] = (
+    ("\u5168\u3066\u306e\u89aa", "mother"),
+    ("\u30b0\u30eb\u30fc\u30d6", "groove"),
+    ("\u30bb\u30f3\u30bf\u30fc", "center"),
+    ("\u4e0a\u534a\u8eab", "upper body"),
+    ("\u9996", "neck"),
+    ("\u982d", "head"),
+    ("\u4e0b\u534a\u8eab", "lower body"),
+    ("\u5de6\u80a9", "shoulder L"),
+    ("\u5de6\u8155", "arm L"),
+    ("\u5de6\u3072\u3058", "elbow L"),
+    ("\u5de6\u624b\u9996", "wrist L"),
+    ("\u5de6\u3072\u3056", "kneeL"),
+    ("\u5de6\u8db3\u9996", "ankleL"),
+    ("\u53f3\u80a9", "shoulderR"),
+    ("\u53f3\u8155", "armR"),
+    ("\u53f3\u3072\u3058", "elbowR"),
+    ("\u53f3\u624b\u9996", "wristR"),
+    ("\u53f3\u8db3", "legR"),
+    ("\u53f3\u3072\u3056", "kneeR"),
+    ("\u53f3\u8db3\u9996", "ankleR"),
+)
+
 
 @dataclass
 class PmxAnalysis:
@@ -170,6 +194,7 @@ class PmxAnalysis:
     resolved_texture_count: int = 0
     missing_texture_refs: list[str] = field(default_factory=list)
     missing_skeleton_groups: list[str] = field(default_factory=list)
+    missing_required_skeleton_bones: list[str] = field(default_factory=list)
     content_warning_scan: dict[str, object] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
@@ -1247,6 +1272,142 @@ def run_process_streamed(
     return output
 
 
+def compact_log_excerpt(lines: list[str], max_lines: int = 80) -> str:
+    if not lines:
+        return ""
+    markers = (
+        "error",
+        "exception",
+        "traceback",
+        "failed",
+        "runtimeerror",
+        "warning",
+        "could not",
+        "not found",
+        "permission",
+        "access",
+        "cancel",
+    )
+    interesting: list[str] = []
+    for line in lines:
+        lower = line.lower()
+        if any(marker in lower for marker in markers):
+            interesting.append(line)
+    selected: list[str] = []
+    for line in interesting[-max(10, max_lines // 2) :]:
+        if line not in selected:
+            selected.append(line)
+    tail_budget = max(0, max_lines - len(selected))
+    for line in lines[-tail_budget:]:
+        if line not in selected:
+            selected.append(line)
+    if not selected:
+        selected = lines[-max_lines:]
+    return "\n".join(selected[-max_lines:])
+
+
+def missing_output_log_candidates(expected_path: Path, log_path: Path | None = None) -> list[Path]:
+    candidates: list[Path] = []
+    if log_path is not None:
+        candidates.append(log_path)
+    folder = expected_path.parent
+    if folder.exists():
+        candidates.extend(sorted(folder.glob("*.log"), key=lambda item: item.stat().st_mtime if item.exists() else 0, reverse=True))
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for candidate in candidates:
+        try:
+            key = str(candidate.resolve()).lower()
+        except Exception:
+            key = str(candidate).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
+
+
+def missing_output_diagnostic(
+    expected_path: Path,
+    log_path: Path | None = None,
+    command: list[str] | None = None,
+    max_log_lines: int = 80,
+) -> str:
+    expected_path = Path(expected_path)
+    lines: list[str] = [
+        "Missing-output diagnostics:",
+        f"- Expected output: {expected_path}",
+        f"- Output folder: {expected_path.parent}",
+    ]
+    if command:
+        lines.append("- Blender command: " + " ".join(str(part) for part in command))
+
+    if expected_path.parent.exists():
+        try:
+            siblings = sorted(
+                [path for path in expected_path.parent.iterdir() if path.is_file()],
+                key=lambda item: item.stat().st_mtime,
+                reverse=True,
+            )
+            if siblings:
+                preview = ", ".join(path.name for path in siblings[:12])
+                suffix = "" if len(siblings) <= 12 else f", ... {len(siblings) - 12} more"
+                lines.append(f"- Files currently in output folder: {preview}{suffix}")
+            else:
+                lines.append("- Output folder exists but contains no files.")
+        except Exception as exc:
+            lines.append(f"- Could not list output folder: {exc}")
+    else:
+        lines.append("- Output folder does not exist.")
+
+    log_candidates = [path for path in missing_output_log_candidates(expected_path, log_path) if path.exists()]
+    if not log_candidates:
+        lines.append("- No Blender log file was found next to the expected output.")
+    else:
+        for candidate in log_candidates[:3]:
+            try:
+                raw_lines = candidate.read_text(encoding="utf-8", errors="replace").splitlines()
+                excerpt = compact_log_excerpt(raw_lines, max_log_lines)
+            except Exception as exc:
+                lines.append(f"- Could not read Blender log {candidate}: {exc}")
+                continue
+            lines.append(f"\nBlender log excerpt from {candidate}:")
+            lines.append(excerpt if excerpt else "(log file is empty)")
+
+    lines.append(
+        "\nIf the log excerpt has no Python traceback, Blender likely exited before the script reached the save/write step "
+        "or was interrupted by an external Blender/add-on/Windows environment issue."
+    )
+    return "\n".join(lines)
+
+
+def raise_missing_output(
+    expected_path: Path,
+    log_path: Path | None = None,
+    command: list[str] | None = None,
+    label: str = "Blender",
+) -> None:
+    diagnostic = missing_output_diagnostic(expected_path, log_path=log_path, command=command)
+    raise RuntimeError(f"{label} completed but did not write {expected_path}\n\n{diagnostic}")
+
+
+def enrich_missing_output_message(message: str) -> str:
+    text = str(message or "")
+    if "Missing-output diagnostics:" in text:
+        return text
+    match = MISSING_OUTPUT_RE.search(text)
+    if not match:
+        return text
+    raw_path = match.group("path").strip().strip("\"'")
+    if not raw_path:
+        return text
+    try:
+        expected_path = Path(raw_path)
+    except Exception:
+        return text
+    return text + "\n\n" + missing_output_diagnostic(expected_path)
+
+
 def verify_and_install_addons(
     blender_exe: Path,
     progress: ProgressCallback | None = None,
@@ -1793,10 +1954,17 @@ def analyze_pmx(pmx_path: Path, source_dir: Path | None = None) -> PmxAnalysis:
 
         analysis.bone_count = reader.read_i32()
         bone_names: set[str] = set()
+        exact_bone_names: set[str] = set()
         for _ in range(analysis.bone_count):
             name, english_name = read_bone_names(reader, analysis.encoding, bone_index_size)
-            bone_names.add(name.strip().lower())
-            bone_names.add(english_name.strip().lower())
+            stripped_name = name.strip()
+            stripped_english_name = english_name.strip()
+            if stripped_name:
+                exact_bone_names.add(stripped_name)
+                bone_names.add(stripped_name.lower())
+            if stripped_english_name:
+                exact_bone_names.add(stripped_english_name)
+                bone_names.add(stripped_english_name.lower())
 
         analysis.morph_count = reader.read_i32()
         for _ in range(analysis.morph_count):
@@ -1836,7 +2004,21 @@ def analyze_pmx(pmx_path: Path, source_dir: Path | None = None) -> PmxAnalysis:
             missing_groups.append(group)
     analysis.missing_skeleton_groups = missing_groups
 
+    missing_required_bones = [
+        f"{japanese_name} / {english_name}"
+        for japanese_name, english_name in REQUIRED_MMD_SKELETON_BONES
+        if japanese_name not in exact_bone_names and english_name not in exact_bone_names
+    ]
+    analysis.missing_required_skeleton_bones = missing_required_bones
+
     warnings: list[str] = []
+    if missing_required_bones:
+        preview = ", ".join(missing_required_bones[:10])
+        suffix = "" if len(missing_required_bones) <= 10 else f" and {len(missing_required_bones) - 10} more"
+        warnings.append(
+            "MMD skeleton compatibility check failed: missing exact required bones: "
+            f"{preview}{suffix}. Import is expected to fail because the model does not use the required MMD humanoid bone names."
+        )
     if missing_groups:
         warnings.append("Missing expected MMD humanoid skeleton groups: " + ", ".join(missing_groups))
     if analysis.texture_file_count <= 0:
@@ -2488,9 +2670,9 @@ def fix_spine_blend(
         cancel_check=cancel_check,
     )
     if not output_blend.exists():
-        raise RuntimeError(f"Blender completed but did not write {output_blend}")
+        raise_missing_output(output_blend, log_path=log_path, command=command)
     if not report_path.exists():
-        raise RuntimeError(f"Blender completed but did not write {report_path}")
+        raise_missing_output(report_path, log_path=log_path, command=command)
     report = json.loads(report_path.read_text(encoding="utf-8"))
     emit(progress, f"Blender spine fix step finished in {time.monotonic() - started:.1f}s")
     return SpineFixResult(
