@@ -3753,6 +3753,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.tabs)
         self._build_main_tab()
         self._build_model_manager_tab()
+        self._build_source_to_mmd_tab()
         self._build_import_tab()
         self._build_fix_tab()
         self._build_spine_tab()
@@ -3992,6 +3993,13 @@ class ImporterWindow(QtWidgets.QMainWindow):
         )
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        reverse_tab = getattr(self, "source_to_mmd_tab", None)
+        if reverse_tab is not None and not reverse_tab.request_shutdown(self.close):
+            # Keep the window and QThread alive until the backend has stopped
+            # Blender/Crowbar; never destroy a running reverse-conversion thread.
+            event.ignore()
+            self.statusBar().showMessage("Stopping Source to MMD conversion before closing…")
+            return
         worker = self.worker
         if worker is not None and worker.isRunning():
             choice = QtWidgets.QMessageBox.question(
@@ -5455,9 +5463,10 @@ class ImporterWindow(QtWidgets.QMainWindow):
         self.advanced_steps_visible = visible
         main_index = self.tab_index_for_content_widget(getattr(self, "main_tab", None))
         manager_index = self.tab_index_for_content_widget(getattr(self, "model_manager_tab", None))
+        reverse_index = self.tab_index_for_content_widget(getattr(self, "source_to_mmd_tab", None))
         l4d2 = getattr(self, "selected_game", "gmod") == "l4d2"
         for index in range(self.tabs.count()):
-            is_primary = index == main_index or index == manager_index
+            is_primary = index in {main_index, manager_index, reverse_index}
             tab_visible = is_primary or visible
             if index == manager_index and l4d2:
                 # Model Manager is GMod-only (manages garrysmod/addons); hide it under L4D2.
@@ -5468,7 +5477,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
                 self.tabs.tabBar().setTabVisible(index, tab_visible)
         if not visible:
             current = self.tabs.currentIndex()
-            if current not in {main_index, manager_index}:
+            if current not in {main_index, manager_index, reverse_index}:
                 self.tabs.setCurrentIndex(max(0, main_index))
         button = getattr(self, "main_advanced_steps_button", None)
         if isinstance(button, QtWidgets.QPushButton):
@@ -6629,6 +6638,22 @@ class ImporterWindow(QtWidgets.QMainWindow):
         scroll.setWidget(content)
         tab_layout.addWidget(scroll)
         self.tabs.addTab(tab, "Main Import to GMod")
+
+    def _build_source_to_mmd_tab(self) -> None:
+        from source_to_mmd_gui import SourceToMmdTab
+
+        self.source_to_mmd_tab = SourceToMmdTab(
+            self, busy_check=self._reject_if_busy, preview_class=StaticModelPreviewWidget,
+        )
+        # Reuse the existing task guard, including the maintenance actions that
+        # can remove the managed Blender installation while a step uses it.
+        self.source_to_mmd_tab.taskStarted.connect(lambda worker: setattr(self, "worker", worker))
+        self.source_to_mmd_tab.taskFinished.connect(self._source_to_mmd_finished)
+        self.tabs.addTab(self.source_to_mmd_tab, "Source → MMD")
+
+    def _source_to_mmd_finished(self, worker: QtCore.QThread) -> None:
+        if self.worker is worker:
+            self.worker = None
 
     def _build_model_manager_tab(self) -> None:
         tab = QtWidgets.QWidget()

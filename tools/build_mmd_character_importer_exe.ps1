@@ -269,6 +269,19 @@ try {
     Assert-RequiredFile "external_tools\vc_runtime\vc90\msvcm90.dll"
     Assert-RequiredFile "external_tools\vc_runtime\vc90\msvcp90.dll"
     Assert-RequiredFile "external_tools\vc_runtime\vc90\msvcr90.dll"
+    Assert-RequiredFile "external_tools\crowbar\cli\CrowbarCommandLineDecomp.exe"
+    Assert-RequiredFile "tools\source_to_mmd_gui.py"
+    Assert-RequiredFile "tools\source_to_mmd_core.py"
+    foreach ($ReverseStage in @(
+        "common.py", "decompile_and_extract.py", "blender_setup_addons.py",
+        "blender_retarget.py", "blender_materials.py", "blender_flexes.py",
+        "blender_finalize_export.py", "blender_motion_check.py", "validate_pmx.py",
+        "morph_recipes.py", "rest_pose.py",
+    "arm_tuning.py", "arm_hinge.py", "leg_tuning.py", "torso_pivots.py", "source_helpers.py", "pmx_bone_order.py",
+        "reference\bone_mapping.py", "reference\flex_name_dictionary.json"
+    )) {
+        Assert-RequiredFile "tools\source_to_mmd\$ReverseStage"
+    }
     # Bundle a filtered copy of tools/ so stale __pycache__ bytecode and the
     # PowerShell build/sync scripts are not embedded in the release exe.
     $StagedToolsDir = Join-Path $GeneratedBuildInfoDir "staged_tools"
@@ -313,6 +326,7 @@ try {
     Add-RequiredData "steps.txt" "."
     Add-RequiredData "Translation Templates Write.txt" "."
     Add-RequiredData "README.md" "."
+    Add-RequiredData "docs\SourceToMMD.md" "docs"
     Add-RequiredData "reference\ref_motion" "reference\ref_motion"
     Add-RequiredData "reference\proportion_trick_script-main_new\README.md" "reference\proportion_trick_script-main_new"
     Add-RequiredData "reference\proportion_trick_script-main_new\operator_proportion_trick.py" "reference\proportion_trick_script-main_new"
@@ -358,6 +372,8 @@ try {
     }
 
     $HiddenImports = @(
+        "source_to_mmd_gui",
+        "source_to_mmd_core",
         "ctypes",
         "_ctypes",
         "numpy",
@@ -551,6 +567,12 @@ try {
             required = $true
             role = "Source VTF texture and spawn-icon conversion"
             companion_files = @("DevIL.dll", "HLLib.dll", "VTFLib.dll", "msvcm80.dll", "msvcp80.dll", "msvcr80.dll")
+        },
+        [ordered]@{
+            name = "Crowbar command-line decompiler"
+            path = "external_tools\crowbar\cli\CrowbarCommandLineDecomp.exe"
+            required = $true
+            role = "Decompiles extracted Source character models for the Source to MMD workflow"
         }
     )
     $BundledRuntimeDlls = @(
@@ -586,6 +608,7 @@ try {
             "Bundled tools/plugins/templates are extracted by PyInstaller to a temporary runtime folder when the executable starts.",
             "Blender zip is optional. If not bundled, the app will auto-download the official Blender 4.5 zip and use its managed portable Blender.",
             "VTFCmd is bundled for VTF conversion. A separate VTFEdit/VTFCmd install is not required at runtime.",
+            "Crowbar and the Source-to-MMD stage scripts are bundled for the experimental Windows reverse workflow.",
             "A local Garry's Mod install is still required because StudioMDL and gmad are distributed with Garry's Mod."
         )
     }

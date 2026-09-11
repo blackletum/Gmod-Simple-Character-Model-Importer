@@ -103,6 +103,24 @@ does not, browse to the Garry's Mod install folder or to:
 ...\GarrysMod\bin\studiomdl.exe
 ```
 
+## Source to MMD (experimental, Windows)
+
+The **Source → MMD** tab converts an extracted Source character `.mdl` into an
+MMD `.pmx` model. It is available beside the main import tab regardless of the
+forward workflow's target game. Start with a GMod / Half-Life 2 character with
+its `.vvd`, `.vtx`, and material files present.
+
+Choose the model, materials folder, and output folder; click **Analyze model**,
+review the character parts, and click **Convert to MMD**. Each run keeps its
+logs, reports, textures, and Blender checkpoints. An optional VMD check reimports
+the PMX into Blender and samples the motion for severe geometry failures.
+
+This is an initial conversion workflow: automatic secondary physics and moving
+iris gaze are not implemented, facial expression combinations are approximate,
+and native MMD playback still needs validation. See the
+[Source to MMD guide](docs/SourceToMMD.md) for setup, outputs, motion testing, and
+the current limits.
+
 ## Run on Linux
 
 There is no Linux binary release; on Linux you run the program from source.

@@ -7,6 +7,13 @@ sorts bones/materials/bodygroups/flexes/collision, exports Source files,
 generates icons and QC files, compiles with Garry's Mod StudioMDL, and packages
 the final addon.
 
+The **Source → MMD** tab adds an experimental reverse workflow for extracted
+GMod / Half-Life 2 characters on Windows. It analyzes a Source `.mdl`, exports
+a PMX with textures and an MMD rig, and keeps conversion reports and Blender
+checkpoints. See [Source to MMD](SourceToMMD.md) for the GUI steps, optional VMD
+check, and the current limitations. This reverse workflow does not require
+StudioMDL or a final addon packaging step.
+
 ## Requirements
 
 These requirements apply when running from source, building the executable, or
