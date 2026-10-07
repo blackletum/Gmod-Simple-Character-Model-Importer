@@ -45,6 +45,15 @@ KNOWN_L4D2_FLEX_CONTROLLERS = frozenset({
 GAME_CHOICES = ("gmod", "l4d2")
 SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 FLEX_NAME_RE = re.compile(r"^[a-z0-9_]+$")
+# A flex name is also an identifier in the `%name = name` rule Step 14 writes,
+# and studiomdl parses that right-hand side as an expression: a name starting
+# with a digit is read as a number (a morph named "8" compiled to the constant
+# 8.0, so the flex was stuck fully on) and max/min are rule functions (compile
+# error). Such names get a "_" prefix, the pipeline's identifier rule.
+FLEX_RULE_RESERVED_NAMES = frozenset({"max", "min"})
+FLEX_NAME_PREFIXED_WARNING = (
+    "Flex name started with a digit or was max/min, which studiomdl cannot use in a flex rule; added a '_' prefix."
+)
 EPSILON = 1e-7
 MAX_SOURCE_FLEXES_EXCLUSIVE = 95
 TARGET_SOURCE_FLEXES = MAX_SOURCE_FLEXES_EXCLUSIVE - 1
@@ -115,6 +124,19 @@ def flex_output_name(name: str) -> str:
     return stripped_safe_name(name).lower()
 
 
+def source_flex_name(name: str) -> str:
+    """flex_output_name() that is also a usable studiomdl flex-rule identifier.
+    Names that already are come back unchanged."""
+    text = flex_output_name(name)
+    if text and (text[0].isdigit() or text in FLEX_RULE_RESERVED_NAMES):
+        text = "_" + text
+    return text
+
+
+def is_source_flex_name(name: str) -> bool:
+    return bool(FLEX_NAME_RE.fullmatch(name)) and not name[0].isdigit() and name not in FLEX_RULE_RESERVED_NAMES
+
+
 def normalized_name(name: str) -> str:
     """Loose match key for a morph name (case/space/punctuation insensitive).
 
@@ -134,9 +156,9 @@ def normalized_name(name: str) -> str:
 
 
 def unique_name(base: str, used: set[str], fallback: str) -> str:
-    candidate = flex_output_name(base) or fallback
-    fallback = flex_output_name(fallback) or "flex"
-    if not FLEX_NAME_RE.fullmatch(candidate):
+    candidate = source_flex_name(base) or fallback
+    fallback = source_flex_name(fallback) or "flex"
+    if not is_source_flex_name(candidate):
         candidate = fallback
     root = candidate
     index = 2
@@ -631,7 +653,7 @@ def collect_flexes(game: str = "gmod") -> tuple[list[dict[str, object]], list[st
                 else:
                     enabled = False
                     action = "remove"
-                    final_name = flex_output_name(key.name) or ("removed_flex_%03d" % index)
+                    final_name = source_flex_name(key.name) or ("removed_flex_%03d" % index)
                     category = "face" if "face" in obj.name.lower() else "body"
                     confidence = 0.0
                     if controller in used_l4d2_controllers:
@@ -641,6 +663,8 @@ def collect_flexes(game: str = "gmod") -> tuple[list[dict[str, object]], list[st
             else:
                 base_name, category, confidence, warnings = infer_flex_name(key.name, obj.name, mapping, normalized_mapping)
                 final_name = unique_name(base_name, used_names, fallback)
+                if source_flex_name(base_name) != flex_output_name(base_name):
+                    warnings.append(FLEX_NAME_PREFIXED_WARNING)
                 enabled = True
                 action = "keep"
                 if confidence < 0.60:
@@ -887,6 +911,8 @@ def validate_plan(plan: dict[str, object]) -> list[str]:
         name = str(entry.get("final_name") or "").strip()
         if not FLEX_NAME_RE.fullmatch(name):
             errors.append(f"{entry.get('uid')}: flex name must use lowercase letters, numbers, and underscores: {name!r}")
+        elif not is_source_flex_name(name):
+            errors.append(f"{entry.get('uid')}: flex name must start with a letter or underscore and cannot be max or min: {name!r}")
         if name in seen:
             errors.append(f"{entry.get('uid')}: duplicate flex name {name!r}")
         seen.add(name)

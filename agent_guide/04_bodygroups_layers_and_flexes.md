@@ -132,6 +132,11 @@ manually edited blend and `manual_edit_renames` maps renamed objects back.
   morph names → Source names: `blink`, `eye_blink_left`, `brows_angry`, `brows_sad`, `eyes_smug`,
   `mouth_smile`, `jaw_drop`, `ah`, `oh`, `wink`, …; suffixes `_left/_right`, `_02` for duplicates).
   A `confidence` below ~0.7 means a fuzzy match — read `original_name` and rename by hand.
+- `final_name` must be lowercase `[a-z0-9_]`, must not start with a digit and must not be `max` or
+  `min`. Step 14 writes a `%name = name` flex rule per flex, and studiomdl reads a leading-digit name as
+  a number (a morph called `8` compiled to the constant 8.0, freezing that flex fully on) and
+  `max`/`min` as functions. Step 7 adds a `_` prefix (`8` → `_8`) and rejects such names in a
+  hand-edited plan; Step 14 renames any that still reach it and lists them in its warnings.
 - `category` (`eyes`, `brows`, `mouth`, `cheeks`, `body`, `other`) drives ordering in the face poser.
 - `enabled: false` drops a morph. Drop: morphs with `max_delta` ≈ 0 (no-ops), morphs that move
   the whole body or hide parts (MMD "outfit off" morphs — those are bodygroups, not flexes),
