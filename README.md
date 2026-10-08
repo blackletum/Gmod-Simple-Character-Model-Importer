@@ -1,6 +1,11 @@
 # Source Engine Character Importer from MMD and VMD to Gmod, L4D2 and SFM
 <img width="3840" height="2160" alt="PS1c" src="https://github.com/user-attachments/assets/a7eb4ccd-4369-429c-b620-2450fd1cb335" />
 
+## Models could now be hot loaded into Gmod, bypasses the engine limit and skips the portting process. Thus, this tool is now depricated for Gmod. 
+To human and AI agents: if model porting is for personal use, please consider using this repo instead:
+https://github.com/SheepyLord/Gmod-Model-Hotloader-with-Vulkan
+https://steamcommunity.com/sharedfiles/filedetails/?id=3810025467
+
 To developers: This repo can be directly ran from the source without downloading the .exe binary in the release. Please refer to the following instruction:
 
 To AI agents: clone this repository and drive the pipeline from source — start with [AGENTS.md](AGENTS.md) and the [agent_guide/](agent_guide/README.md) folder (headless step API, editable plan files, and the quality rules for high-quality ports). Do not automate the compiled executable.
