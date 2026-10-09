@@ -1632,6 +1632,63 @@ def parse_vta_flexes(path: Path) -> list[str]:
     return flexes
 
 
+# A flex name is also an identifier in the `%name = name` rule that
+# flex_model_block writes, and studiomdl parses that right-hand side as an
+# expression: a name starting with a digit is read as a number ("8" compiles to
+# the constant 8.0, so the flex is stuck fully on; "2way0" fails with "unknown
+# controller") and max/min are rule functions ("missing comma"). Step 7 no
+# longer produces such names; this also covers older Step 9 exports and
+# hand-edited plans.
+FLEX_CONTROLLER_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+FLEX_RULE_RESERVED_NAMES = frozenset({"max", "min"})
+
+
+def is_safe_flex_controller_name(name: str) -> bool:
+    return bool(FLEX_CONTROLLER_NAME_RE.fullmatch(name)) and name.lower() not in FLEX_RULE_RESERVED_NAMES
+
+
+def safe_flex_controller_names(names: list[str]) -> dict[str, str]:
+    """Map flex names to names studiomdl accepts as flex controllers. Safe names
+    map to themselves, so a QC that already compiled correctly is unchanged;
+    unsafe ones get the identifier rule (unsupported characters dropped, "_"
+    prefix) plus a _NN suffix if that collides with another flex."""
+    ordered = list(dict.fromkeys(names))
+    mapping = {name: name for name in ordered if is_safe_flex_controller_name(name)}
+    used = set(mapping)
+    for name in ordered:
+        if name in mapping:
+            continue
+        base = re.sub(r"[^A-Za-z0-9_]+", "", name) or "flex"
+        if base[0].isdigit() or base.lower() in FLEX_RULE_RESERVED_NAMES:
+            base = "_" + base
+        candidate = base
+        index = 2
+        while candidate in used:
+            candidate = f"{base}_{index:02d}"
+            index += 1
+        used.add(candidate)
+        mapping[name] = candidate
+    return mapping
+
+
+def flex_controller_names_for_source(source_dir: Path) -> dict[str, str]:
+    """One mapping across every VTA in the folder, so a flex shared by several
+    bodygroups (an additive merge) keeps a single controller name."""
+    names: list[str] = []
+    for vta in sorted(source_dir.glob("*.vta"), key=lambda item: natural_key(item.name)):
+        names.extend(parse_vta_flexes(vta))
+    return safe_flex_controller_names(names)
+
+
+def flex_controller_rename_warnings(source_dir: Path) -> list[str]:
+    return [
+        f"Flex {original!r} is not a valid studiomdl flex controller name (it starts with a digit, is max/min, "
+        f"or has unsupported characters); Step 14 compiles it as {renamed!r}."
+        for original, renamed in flex_controller_names_for_source(source_dir).items()
+        if original != renamed
+    ]
+
+
 def material_uid(name: str) -> str:
     return f"mat_{safe_lower(name, 'material')}"
 
@@ -1855,6 +1912,7 @@ def analyze(input_path: Path, author: str = "", category: str = "", model_name: 
                 "anims/reference_male.smd was not found in the Step 9 export; the compile will fall back to the "
                 "female reference pose. Re-run Step 9 to regenerate both reference animations."
             )
+        warnings.extend(flex_controller_rename_warnings(step9_dir))
     texture_manifest = Path(discovered["step12_manifest"])
     # SFM: VRD ($proceduralbones) is opt-in and off by default, so a missing Step 11 VRD is
     # expected and must not warn.
@@ -2172,8 +2230,11 @@ def qc_model_header(plan: dict[str, Any], pm: bool = False, arms: bool = False) 
     return [f'$modelname "{author}/{category}/{stem}.mdl" \n\n']
 
 
-def flex_model_block(name: str, smd: str, vta: Path) -> list[str]:
+def flex_model_block(name: str, smd: str, vta: Path, controller_names: dict[str, str] | None = None) -> list[str]:
     flexes = parse_vta_flexes(vta)
+    if controller_names is None:
+        controller_names = safe_flex_controller_names(flexes)
+    flexes = [controller_names.get(flex, flex) for flex in flexes]
     lines = [f'$model "{name}" "{smd}" {{\n\n']
     if flexes:
         lines.append(f'\tflexfile "{vta.name}"\n\t{{\n')
@@ -2251,7 +2312,7 @@ def default_bodygroup_rows(step9_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _bodygroup_qc_blocks_scan(source_dir: Path, include_flexes: bool) -> list[str]:
+def _bodygroup_qc_blocks_scan(source_dir: Path, include_flexes: bool, controller_names: dict[str, str] | None = None) -> list[str]:
     """Back-compat default: every SMD is its own bodygroup, hideable except the
     core body parts (ESSENTIAL_BODYGROUP_NAMES); flex SMDs (with a .vta) become
     $model blocks. Used when the plan has no bodygroup config (legacy plans)."""
@@ -2261,7 +2322,7 @@ def _bodygroup_qc_blocks_scan(source_dir: Path, include_flexes: bool) -> list[st
         consumed.add("Face.smd")
         face_vta = source_dir / "Face.vta"
         lines.extend(
-            flex_model_block("Face", "Face.smd", face_vta)
+            flex_model_block("Face", "Face.smd", face_vta, controller_names)
             if include_flexes and face_vta.exists()
             else bodygroup_block("Face", "Face.smd", not is_essential_bodygroup("Face"))
         )
@@ -2269,7 +2330,7 @@ def _bodygroup_qc_blocks_scan(source_dir: Path, include_flexes: bool) -> list[st
         consumed.add("Body.smd")
         body_vta = source_dir / "Body.vta"
         lines.extend(
-            flex_model_block("Body", "Body.smd", body_vta)
+            flex_model_block("Body", "Body.smd", body_vta, controller_names)
             if include_flexes and body_vta.exists()
             else bodygroup_block("Body", "Body.smd", not is_essential_bodygroup("Body"))
         )
@@ -2279,13 +2340,18 @@ def _bodygroup_qc_blocks_scan(source_dir: Path, include_flexes: bool) -> list[st
         name = smd.stem
         vta = source_dir / f"{name}.vta"
         if include_flexes and vta.exists():
-            lines.extend(flex_model_block(name, smd.name, vta))
+            lines.extend(flex_model_block(name, smd.name, vta, controller_names))
             continue
         lines.extend(bodygroup_block(name, smd.name, not is_essential_bodygroup(name)))
     return lines
 
 
-def _bodygroup_qc_blocks_from_config(source_dir: Path, include_flexes: bool, bodygroups: list[dict[str, Any]]) -> list[str]:
+def _bodygroup_qc_blocks_from_config(
+    source_dir: Path,
+    include_flexes: bool,
+    bodygroups: list[dict[str, Any]],
+    controller_names: dict[str, str] | None = None,
+) -> list[str]:
     """Emit bodygroups from the step-14 control plan: SMDs sharing a group become
     one switchable $bodygroup; non-hideable groups omit `blank`. Flex SMDs are
     always their own $model (never grouped or hidden)."""
@@ -2322,7 +2388,7 @@ def _bodygroup_qc_blocks_from_config(source_dir: Path, include_flexes: bool, bod
             stem = Path(member["smd"]).stem
             vta = source_dir / f"{stem}.vta"
             if include_flexes and vta.exists():
-                lines.extend(flex_model_block(stem, member["smd"], vta))
+                lines.extend(flex_model_block(stem, member["smd"], vta, controller_names))
             else:
                 lines.extend(bodygroup_group_block(member["name"], [member["smd"]], False))
         nonflex = [m for m in members if not m["has_flex"]]
@@ -2343,16 +2409,17 @@ def _bodygroup_qc_blocks_from_config(source_dir: Path, include_flexes: bool, bod
         stem = smd.stem
         vta = source_dir / f"{stem}.vta"
         if include_flexes and vta.exists():
-            lines.extend(flex_model_block(stem, smd.name, vta))
+            lines.extend(flex_model_block(stem, smd.name, vta, controller_names))
         else:
             lines.extend(bodygroup_block(stem, smd.name, not is_essential_bodygroup(stem)))
     return lines
 
 
 def bodygroup_qc_blocks(source_dir: Path, include_flexes: bool = True, bodygroups: list[dict[str, Any]] | None = None) -> list[str]:
+    controller_names = flex_controller_names_for_source(source_dir) if include_flexes else None
     if bodygroups:
-        return _bodygroup_qc_blocks_from_config(source_dir, include_flexes, bodygroups)
-    return _bodygroup_qc_blocks_scan(source_dir, include_flexes)
+        return _bodygroup_qc_blocks_from_config(source_dir, include_flexes, bodygroups, controller_names)
+    return _bodygroup_qc_blocks_scan(source_dir, include_flexes, controller_names)
 
 
 def texture_groups_config_path(workspace_root: Path) -> Path:
@@ -5029,6 +5096,10 @@ def compose(plan_path: Path) -> dict[str, Any]:
         shutil.rmtree(addon_dir)
     addon_dir.mkdir(parents=True, exist_ok=True)
     emit("Prepared QC source folder.")
+    for warning in flex_controller_rename_warnings(source_dir):
+        emit("WARNING: " + warning)
+        if warning not in warnings:
+            warnings.append(warning)
 
     gmod = dict(plan["gmod"]) if isinstance(plan.get("gmod"), dict) else {}
     # Re-resolve the game tooling (studiomdl + game dir) for the plan's TARGET game so the compile

@@ -33,6 +33,7 @@ that mention a specific material/bone/bodygroup name are worth fixing before rel
 | Step 14: `missing parent definebone` warnings | a kept bone whose parent was merged | automatic repair inserts the parent; if `unrecoverable_missing_parents` is non-empty, fix Step 4 |
 | Step 14: `Texture processing completed with N blocking error(s)` | Step 12 errors carried into compile | fix Step 12 first |
 | In game: model floats / sinks | pelvis hull wrong or skirt in physics sources | Step 8 sources; hitbox/physics in HLMV |
+| In game: one facial flex stuck fully on (e.g. mouth permanently deformed), or Step 14 retried "without flex controllers" | a flex named with a leading digit (`8`) or `max`/`min` reached the `%name = name` rules; studiomdl reads it as a number/function | current tool prefixes `_` (Step 7) and renames it at compile (Step 14 warning); re-run Step 14 |
 | In game: arms cross / drift (L4D2) | proportion delta carried rotations (fixed in 0.10.21) | update the tool; re-run Step 14 |
 | In game: legs bent (L4D2) / melee weapon on the floor | `$origin` sink / missing TLS `L_weapon_bone` (fixed) | re-run Step 14 with a current tool |
 | In game: blocky "cubes" on dark glossy materials | alpha path on opaque materials (chromium x64 branch) | current tool drops `$alphatest` for opaque bases; re-run Steps 12+14 |

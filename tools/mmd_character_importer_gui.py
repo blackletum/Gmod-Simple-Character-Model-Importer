@@ -444,6 +444,20 @@ def sanitize_internal_identifier_text(value: object) -> str:
     return text
 
 
+# A flex name is also an identifier in studiomdl's `%name = name` flex rule: a
+# leading digit is read as a number ("8" compiles to the constant 8.0) and
+# max/min are rule functions, so both get the "_" prefix (matching
+# blender_sort_flexes.py and sort_qc_compile.py).
+FLEX_RULE_RESERVED_NAMES = frozenset({"max", "min"})
+
+
+def sanitize_flex_name_text(value: object) -> str:
+    text = INTERNAL_IDENTIFIER_UNSAFE_RE.sub("", str(value or "")).lower()
+    if text and (text[0].isdigit() or text in FLEX_RULE_RESERVED_NAMES):
+        text = "_" + text
+    return text
+
+
 def sanitize_display_name_text(value: object) -> str:
     return DISPLAY_NAME_UNSAFE_RE.sub("", str(value or ""))
 
@@ -16796,7 +16810,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
             if str(entry.get("action") or "keep") != "merge":
                 entry["action"] = "keep" if entry["enabled"] else "remove"
         elif item.column() == 1:
-            entry["final_name"] = re.sub(r"[^A-Za-z0-9_]+", "", item.text().strip()).lower()
+            entry["final_name"] = sanitize_flex_name_text(item.text().strip())
             if item.text() != entry["final_name"]:
                 self._updating_flex_table = True
                 item.setText(str(entry["final_name"]))
@@ -16850,8 +16864,7 @@ class ImporterWindow(QtWidgets.QMainWindow):
             self.show_error("Merge flexes", "Select at least two enabled flex rows to merge.")
             return
         new_uid = self.unique_flex_uid()
-        base_name = re.sub(r"[^A-Za-z0-9_]+", "", str(selected[0].get("final_name") or "merged_flex")) or "merged_flex"
-        base_name = base_name.lower()
+        base_name = sanitize_flex_name_text(selected[0].get("final_name") or "merged_flex") or "merged_flex"
         used = {str(entry.get("final_name") or "") for entry in self.flex_entries()}
         final_name = base_name
         index = 2
@@ -16944,6 +16957,8 @@ class ImporterWindow(QtWidgets.QMainWindow):
             name = str(entry.get("final_name") or "").strip()
             if not re.fullmatch(r"[a-z0-9_]+", name):
                 errors.append(f"{entry.get('uid')}: flex name must use lowercase letters, numbers, and underscores: {name}.")
+            elif sanitize_flex_name_text(name) != name:
+                errors.append(f"{entry.get('uid')}: flex name must start with a letter or underscore and cannot be max or min: {name}.")
             if name in seen:
                 errors.append(f"{entry.get('uid')}: duplicate flex name {name}.")
             seen.add(name)
